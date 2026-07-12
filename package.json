@@ -1,0 +1,45 @@
+{
+  "name": "@immediately-run/mdx-plugins",
+  "version": "0.1.0",
+  "description": "immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import).",
+  "license": "MIT",
+  "repository": "github:immediately-run/immediately-run-mdx-plugins",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "globals": "^15.14.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.20.0",
+    "unified": "11.0.5"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
