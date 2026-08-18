@@ -88,6 +88,25 @@ export function sectionId(text: string): string | null {
 }
 
 /**
+ * A heading's canonical id: the section id when the heading is section-like and
+ * section ids are enabled, else the GitHub text slug, else `section` — the last
+ * because an id has to be a usable anchor target and a heading of only punctuation
+ * (or of only non-ASCII text, which `textSlug`'s ASCII `\w` strips entirely) slugs
+ * to the empty string.
+ *
+ * Exported because two other consumers derive this exact value — Grove's `<Toc>`
+ * fallback and the docs corpus checker's citation audit — and derived it from three
+ * separate transcriptions of the same spec paragraph until R3-277. The plugin below
+ * uses it, so the published function and the emitted `id` cannot drift.
+ */
+export function headingId(text: string, options: HeadingAnchorOptions = {}): string {
+  const sec = options.sectionIds !== false ? sectionId(text) : null;
+  if (sec) return sec;
+  const slug = textSlug(text);
+  return slug === '' ? 'section' : slug;
+}
+
+/**
  * Flatten a heading's inline children to plain text — the input to the slug. Text
  * and inline-code contribute their literal value; everything else (emphasis,
  * links, strong) contributes its own flattened children, so `**bold**` and
@@ -148,11 +167,10 @@ const remarkHeadingAnchors: Plugin<[HeadingAnchorOptions?], MdNode> =
       const slug = textSlug(text);
       const sec = sectionEnabled ? sectionId(text) : null;
 
-      // The heading's own canonical id: the section id when section-like (+ opt-in),
-      // else the text slug. An empty slug (heading of only punctuation) falls back
-      // to "section" so the id is always a valid anchor target.
-      let baseId = sec ?? slug ?? '';
-      if (baseId === '') baseId = 'section';
+      // The heading's own canonical id — the SAME function the other consumers
+      // import (R3-277), so what this plugin emits and what a TOC or a citation
+      // audit computes cannot disagree.
+      const baseId = headingId(text, { sectionIds: sectionEnabled });
 
       // In-document de-dup: byte-local (only this file's heading sequence).
       const n = seen.get(baseId) ?? 0;

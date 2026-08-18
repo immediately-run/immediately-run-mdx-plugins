@@ -15,7 +15,18 @@
 // between the two paths is ONLY the micromark extension set and the evaluator, never
 // these plugins.
 
-export { default as remarkHeadingAnchors, textSlug, sectionId } from './remarkHeadingAnchors';
+export {
+  default as remarkHeadingAnchors,
+  textSlug,
+  sectionId,
+  headingId,
+} from './remarkHeadingAnchors';
+
+// R3-277 — the byte-parity fixture every consumer of the slug grammar asserts
+// against, so a disagreement is a failing test in whichever repo drifted rather
+// than a TOC entry that scrolls nowhere.
+export { SLUG_PARITY_FIXTURE } from './slugParityFixture';
+export type { SlugParityCase } from './slugParityFixture';
 export type { HeadingAnchorOptions } from './remarkHeadingAnchors';
 
 export { default as remarkWikiLinks } from './remarkWikiLinks';
