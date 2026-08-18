@@ -27,6 +27,17 @@ export {
 // than a TOC entry that scrolls nowhere.
 export { SLUG_PARITY_FIXTURE } from './slugParityFixture';
 export type { SlugParityCase } from './slugParityFixture';
+
+// R3-277a — the corpus-tooling core: the minimal-YAML frontmatter reader and the
+// entry-enumeration rule, each of which had two implementations that agreed only
+// because one was a careful port of the other.
+export { parseFrontmatter } from './frontmatter';
+export type {
+  FrontmatterParseResult,
+  FrontmatterValue,
+  ParsedFrontmatter,
+} from './frontmatter';
+export { isContentEntryFile, isContentEntryPath } from './corpusEntry';
 export type { HeadingAnchorOptions } from './remarkHeadingAnchors';
 
 export { default as remarkWikiLinks } from './remarkWikiLinks';
