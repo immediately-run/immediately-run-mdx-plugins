@@ -27,6 +27,10 @@ export {
 // than a TOC entry that scrolls nowhere.
 export { SLUG_PARITY_FIXTURE } from './slugParityFixture';
 export type { SlugParityCase } from './slugParityFixture';
+export { LINK_SPACE_FIXTURE } from './linkSpaceFixture';
+export type { LinkSpaceCase } from './linkSpaceFixture';
+export { FS_PREFIX, normalizeAbsolute, resolveLinkTarget } from './linkSpaceCore';
+export type { ResolvedLinkTarget, LinkSpace } from './linkSpaceCore';
 
 // R3-277a — the corpus-tooling core: the minimal-YAML frontmatter reader and the
 // entry-enumeration rule, each of which had two implementations that agreed only

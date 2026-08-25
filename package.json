@@ -1,6 +1,6 @@
 {
   "name": "@immediately-run/mdx-plugins",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "immediately.run's in-house remark plugins for the MDX safe subset (admonitions \u00a712, wiki-links \u00a713, heading/section-id anchors \u00a715) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES \u00a75.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import).",
   "license": "MIT",
   "repository": "github:immediately-run/immediately-run-mdx-plugins",
