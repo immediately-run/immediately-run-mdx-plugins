@@ -47,3 +47,6 @@ export type { HeadingAnchorOptions } from './remarkHeadingAnchors';
 export { default as remarkWikiLinks } from './remarkWikiLinks';
 
 export { default as remarkAdmonitions } from './remarkAdmonitions';
+
+export { LINK_SPACE_FIXTURE } from './linkSpaceFixture';
+export type { LinkSpaceCase } from './linkSpaceFixture';
