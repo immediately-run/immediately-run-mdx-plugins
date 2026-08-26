@@ -27,8 +27,9 @@
     "lint": "eslint src test",
     "test": "npm run build && node --test test/*.test.mjs",
     "prepublishOnly": "npm run build",
-    "docs": "typedoc --json docs/api.json && node scripts/gen-llms.mjs",
-    "check:llms": "node scripts/gen-llms.mjs --check",
+    "docs:json": "typedoc --json docs/api.json",
+    "docs": "npm run docs:json && node scripts/gen-llms.mjs",
+    "check:llms": "npm run docs:json && node scripts/gen-llms.mjs --check",
     "verify": "npm run build && npm test && npm run check:llms && npm run lint"
   },
   "devDependencies": {

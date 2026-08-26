@@ -30,9 +30,12 @@ jobs:
       # Trusted publishing requires npm >= 11.5.1
       - run: npm install -g npm@latest
       - run: npm ci
-      - run: npm run build
-      - run: npm test
-      - run: npm run lint
+      # ONE gate, and it is the same one a contributor runs locally
+      # (`ways_of_working` §4: the local verify gate must equal the deploy gate —
+      # delete the divergence, don't memorize it). This previously listed
+      # build/test/lint by hand, which silently omitted `check:llms`, so the
+      # published API map could drift from the code with CI green.
+      - run: npm run verify
       - name: Publish to npm via trusted publishing (skip if version already published)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
