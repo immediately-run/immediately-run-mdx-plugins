@@ -1,0 +1,37 @@
+# @immediately-run/mdx-plugins
+
+> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import). (v0.5.1)
+
+The grammar + resolution canon shared by every immediately.run render path: the transpiler's compiled MDX, the safe renderer, Grove's runtime, and the docs corpus checker all import THESE implementations — a wiki-link, heading anchor, or link resolution means the same byte everywhere.
+
+## Exports
+
+- `FrontmatterParseResult` (interface)
+- `HeadingAnchorOptions` (interface)
+- `LinkSpace` (interface)
+- `LinkSpaceCase` (interface) — One raw link target and the resolution every consumer must agree on.
+- `SlugParityCase` (interface) — One heading text and the three derivations every consumer must agree on.
+- `FrontmatterValue` (type) — A parsed frontmatter value: a scalar, a list, one level of nesting, or empty.
+- `ParsedFrontmatter` (type) — One document's parsed frontmatter block.
+- `ResolvedLinkTarget` (type)
+- `FS_PREFIX` (const)
+- `LINK_SPACE_FIXTURE` (const)
+- `SLUG_PARITY_FIXTURE` (const)
+- `headingId` (function) — A heading's canonical id: the section id when the heading is section-like and section ids are enabled, else the GitHub text slug, else `section` — the last because an id has to be a usable anchor target and a heading of only punctuation (or of only non-ASCII text, which `textSlug`'s ASCII `\w` strips entirely) slugs to the empty string.
+- `isContentEntryFile` (function) — Is this file name a corpus ENTRY — a page a reader can navigate to?
+- `isContentEntryPath` (function) — Is this PATH a corpus entry?
+- `normalizeAbsolute` (function) — Collapse `.`/`..`/empty segments into a clean absolute path.
+- `parseFrontmatter` (function) — Split a `--- … ---` frontmatter block off the top of a document.
+- `remarkAdmonitions` (function) — Remark plugin factory.
+- `remarkHeadingAnchors` (function) — Remark plugin factory.
+- `remarkWikiLinks` (function) — Remark plugin factory.
+- `resolveLinkTarget` (function) — Resolve a raw link target (a wikilink target or an in-app href's path half — fragment already split off) to an absolute filesystem path.
+- `sectionId` (function) — The section id for a heading's text, or `null` when the heading is prose (not section-like).
+- `textSlug` (function) — GitHub-compatible text slug (MARKDOWN_SYNTAX_SPEC §15.1): lower-case, strip anything that is not a word char / space / hyphen, collapse whitespace to single hyphens.
+
+## The parity fixtures
+
+`SLUG_PARITY_FIXTURE` and `LINK_SPACE_FIXTURE` are published DATA, not tests-in-disguise: every consumer (the plugin here, Grove's runtime, the docs checker) asserts its own outcome against the same cases, so disagreement is a failing test in whichever repo drifted. If you derive a heading id or resolve a link, you are contractually comparing against these.
+
+---
+_Generated from the typed API by `scripts/gen-llms.mjs`; regenerate on export changes (verify checks freshness)._

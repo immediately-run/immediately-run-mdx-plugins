@@ -1,0 +1,7 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "tsconfig": "tsconfig.json",
+  "json": "docs/api.json",
+  
+  "excludePrivate": true
+}
