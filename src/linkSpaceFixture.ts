@@ -28,9 +28,9 @@ export interface LinkSpaceCase {
   /** The absolute path of the file the link was authored in, if known. */
   currentFile?: string;
   /** The enclosing bundle root the consumer declares, `null`/omitted when the
-   *  document is not bundle-hosted. Canonical since R3-480. */
+   *  document is not bundle-hosted. Canonical since R3-482. */
   bundleRoot?: string | null;
-  /** @deprecated Pre-R3-480 spelling of `bundleRoot`, read only when `bundleRoot`
+  /** @deprecated Pre-R3-482 spelling of `bundleRoot`, read only when `bundleRoot`
    *  is absent. Kept so the fixture also pins the dual-read behaviour itself. */
   corpusRoot?: string | null;
   /** See `LinkSpace.bundleChrooted` (BUNDLE_LAYERS_SPEC §9): `$fs:` collapses
@@ -139,7 +139,7 @@ export const LINK_SPACE_FIXTURE: readonly LinkSpaceCase[] = [
     currentFile: '/app/content/home.mdx',
     bundleRoot: '/app/content',
     expect: { state: 'resolved', path: '/app/content/specs/A.mdx' },
-    why: 'R3-480 — the NEW spelling anchors an absolute link exactly as `corpusRoot` did',
+    why: 'R3-482 — the NEW spelling anchors an absolute link exactly as `corpusRoot` did',
   },
   {
     raw: '/specs/A.mdx',
@@ -147,7 +147,7 @@ export const LINK_SPACE_FIXTURE: readonly LinkSpaceCase[] = [
     bundleRoot: '/app/content',
     corpusRoot: '/app/STALE',
     expect: { state: 'resolved', path: '/app/content/specs/A.mdx' },
-    why: 'R3-480 — new-then-old: when both are stated the NEW name wins, never the old',
+    why: 'R3-482 — new-then-old: when both are stated the NEW name wins, never the old',
   },
   {
     raw: '/specs/A.mdx',
@@ -156,7 +156,7 @@ export const LINK_SPACE_FIXTURE: readonly LinkSpaceCase[] = [
     corpusRoot: '/app/STALE',
     expect: { state: 'resolved', path: '/specs/A.mdx' },
     why:
-      'R3-480 — an explicit `bundleRoot: null` is a VALUE ("no bundle root"), not "absent", so it ' +
+      'R3-482 — an explicit `bundleRoot: null` is a VALUE ("no bundle root"), not "absent", so it ' +
       'does NOT fall back to a stale `corpusRoot`. This is the case `bundleRoot ?? corpusRoot` ' +
       'gets wrong, and it would anchor every absolute link at the wrong directory.',
   },
@@ -166,6 +166,6 @@ export const LINK_SPACE_FIXTURE: readonly LinkSpaceCase[] = [
     bundleRoot: '/mnt/h',
     bundleChrooted: true,
     expect: { state: 'resolved', path: '/mnt/h/x.mdx' },
-    why: 'R3-480 — the chroot collapse reads the new spelling too, not only the `/p` branch',
+    why: 'R3-482 — the chroot collapse reads the new spelling too, not only the `/p` branch',
   },
 ];
