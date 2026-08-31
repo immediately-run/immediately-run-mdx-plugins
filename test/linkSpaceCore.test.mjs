@@ -11,6 +11,11 @@ test('resolveLinkTarget passes LINK_SPACE_FIXTURE (the canon)', () => {
   for (const c of LINK_SPACE_FIXTURE) {
     const got = resolveLinkTarget(c.raw, {
       currentFile: c.currentFile,
+      // Both spellings are forwarded VERBATIM — including an absent `bundleRoot`,
+      // which is what makes the R3-480 dual-read cases meaningful. Collapsing them
+      // here (`c.bundleRoot ?? c.corpusRoot`) would make the fixture assert the
+      // harness's fallback instead of the resolver's.
+      ...(('bundleRoot' in c) ? { bundleRoot: c.bundleRoot } : {}),
       corpusRoot: c.corpusRoot,
       bundleChrooted: c.bundleChrooted,
     });
