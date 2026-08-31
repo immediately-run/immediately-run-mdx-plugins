@@ -27,8 +27,11 @@ export interface LinkSpaceCase {
   raw: string;
   /** The absolute path of the file the link was authored in, if known. */
   currentFile?: string;
-  /** The enclosing corpus root the consumer declares, `null`/omitted when the
-   *  document is not corpus-hosted. */
+  /** The enclosing bundle root the consumer declares, `null`/omitted when the
+   *  document is not bundle-hosted. Canonical since R3-480. */
+  bundleRoot?: string | null;
+  /** @deprecated Pre-R3-480 spelling of `bundleRoot`, read only when `bundleRoot`
+   *  is absent. Kept so the fixture also pins the dual-read behaviour itself. */
   corpusRoot?: string | null;
   /** See `LinkSpace.bundleChrooted` (BUNDLE_LAYERS_SPEC §9): `$fs:` collapses
    *  to the scoped root. */
@@ -130,5 +133,39 @@ export const LINK_SPACE_FIXTURE: readonly LinkSpaceCase[] = [
     corpusRoot: '/app/content',
     expect: { state: 'unresolvable' },
     why: 'relative with no known authoring file — the caller may route optimistically',
+  },
+  {
+    raw: '/specs/A.mdx',
+    currentFile: '/app/content/home.mdx',
+    bundleRoot: '/app/content',
+    expect: { state: 'resolved', path: '/app/content/specs/A.mdx' },
+    why: 'R3-480 — the NEW spelling anchors an absolute link exactly as `corpusRoot` did',
+  },
+  {
+    raw: '/specs/A.mdx',
+    currentFile: '/app/content/home.mdx',
+    bundleRoot: '/app/content',
+    corpusRoot: '/app/STALE',
+    expect: { state: 'resolved', path: '/app/content/specs/A.mdx' },
+    why: 'R3-480 — new-then-old: when both are stated the NEW name wins, never the old',
+  },
+  {
+    raw: '/specs/A.mdx',
+    currentFile: '/app/content/home.mdx',
+    bundleRoot: null,
+    corpusRoot: '/app/STALE',
+    expect: { state: 'resolved', path: '/specs/A.mdx' },
+    why:
+      'R3-480 — an explicit `bundleRoot: null` is a VALUE ("no bundle root"), not "absent", so it ' +
+      'does NOT fall back to a stale `corpusRoot`. This is the case `bundleRoot ?? corpusRoot` ' +
+      'gets wrong, and it would anchor every absolute link at the wrong directory.',
+  },
+  {
+    raw: '$fs:/x.mdx',
+    currentFile: '/mnt/h/home.mdx',
+    bundleRoot: '/mnt/h',
+    bundleChrooted: true,
+    expect: { state: 'resolved', path: '/mnt/h/x.mdx' },
+    why: 'R3-480 — the chroot collapse reads the new spelling too, not only the `/p` branch',
   },
 ];

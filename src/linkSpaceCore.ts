@@ -30,9 +30,19 @@
 export const FS_PREFIX = '$fs:';
 
 export interface LinkSpace {
-  /** Absolute filesystem path of the enclosing corpus's root (e.g. `/app/content`),
-   *  or `null` when the document is not corpus-hosted (default). */
-  corpusRoot: string | null;
+  /** Absolute filesystem path of the enclosing **bundle's** root (e.g.
+   *  `/app/content`), or `null` when the document is not bundle-hosted (default).
+   *
+   *  The canonical spelling since R3-480 (`core_concepts §7a` named the concept
+   *  **bundle**). `undefined` means "not stated" and falls back to
+   *  {@link LinkSpace.corpusRoot}; an explicit `null` is a VALUE — "no bundle
+   *  root" — and never falls back. */
+  bundleRoot?: string | null;
+  /** @deprecated The pre-R3-480 spelling of {@link LinkSpace.bundleRoot}. Still
+   *  read (new-then-old) for the rename window, so a caller pinned to an older
+   *  package version keeps resolving links identically. Optional since R3-480:
+   *  state one or the other, not both. */
+  corpusRoot?: string | null;
   /**
    * True when the filesystem this document resolves against is **chroot'd to the
    * bundle** — i.e. the port the app holds was scoped to the bundle's subtree, so
@@ -78,7 +88,22 @@ export type ResolvedLinkTarget =
    *  Callers MUST render this broken/inert — never as an anchor. */
   | { state: 'invalid' };
 
-/** Anchor a corpus-absolute path at `corpusRoot`, clamping the corpus-relative
+/**
+ * The bundle root a caller stated, reading **new-then-old** (R3-480, the
+ * `cross_repo_migration` dual-read rule).
+ *
+ * `undefined` under the new name means "not stated" and falls through to the old
+ * one; an explicit `null` is a VALUE — "no bundle root" — and must NOT fall back,
+ * or a caller that deliberately cleared `bundleRoot` would silently inherit a
+ * stale `corpusRoot` and anchor every absolute link at the wrong directory. This
+ * is why it is not `bundleRoot ?? corpusRoot ?? null`.
+ */
+const statedBundleRoot = (opts: {
+  bundleRoot?: string | null;
+  corpusRoot?: string | null;
+}): string | null => (opts.bundleRoot !== undefined ? opts.bundleRoot : (opts.corpusRoot ?? null));
+
+/** Anchor a bundle-absolute path at the bundle root, clamping the bundle-relative
  *  half FIRST so the virtual corpus space stays closed under traversal. Shared by
  *  the `/p` branch and — under a bundle chroot — the `$fs:/p` branch, so the two
  *  spellings cannot drift into resolving differently. */
@@ -98,6 +123,10 @@ export function resolveLinkTarget(
   raw: string,
   opts: {
     currentFile?: string;
+    /** The enclosing bundle's root — canonical since R3-480. */
+    bundleRoot?: string | null;
+    /** @deprecated Pre-R3-480 spelling of `bundleRoot`; read only when
+     *  `bundleRoot` is absent. */
     corpusRoot?: string | null;
     /** See `LinkSpace.bundleChrooted`. Under a bundle-chroot'd grant `$fs:`
      *  resolves in the corpus space, because they are the same space. */
@@ -114,11 +143,11 @@ export function resolveLinkTarget(
     // two spellings collapse. `normalizeAbsolute` clamps `..` at the root either
     // way, so neither spelling can climb out — the collapse changes WHERE a
     // `$fs:` link points, never whether it can escape.
-    if (opts.bundleChrooted) return resolveCorpusAbsolute(rest, opts.corpusRoot ?? null);
+    if (opts.bundleChrooted) return resolveCorpusAbsolute(rest, statedBundleRoot(opts));
     return { state: 'resolved', path: normalizeAbsolute(rest) };
   }
   if (raw.startsWith('/')) {
-    const corpusRoot = opts.corpusRoot ?? null;
+    const corpusRoot = statedBundleRoot(opts);
     if (corpusRoot !== null) {
       // Clamp the corpus-relative half FIRST (the virtual FS is closed — `/../x`
       // stays inside the corpus), THEN anchor it at the corpus root.
