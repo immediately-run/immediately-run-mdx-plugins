@@ -33,14 +33,14 @@ export interface LinkSpace {
   /** Absolute filesystem path of the enclosing **bundle's** root (e.g.
    *  `/app/content`), or `null` when the document is not bundle-hosted (default).
    *
-   *  The canonical spelling since R3-480 (`core_concepts §7a` named the concept
+   *  The canonical spelling since R3-482 (`core_concepts §7a` named the concept
    *  **bundle**). `undefined` means "not stated" and falls back to
    *  {@link LinkSpace.corpusRoot}; an explicit `null` is a VALUE — "no bundle
    *  root" — and never falls back. */
   bundleRoot?: string | null;
-  /** @deprecated The pre-R3-480 spelling of {@link LinkSpace.bundleRoot}. Still
+  /** @deprecated The pre-R3-482 spelling of {@link LinkSpace.bundleRoot}. Still
    *  read (new-then-old) for the rename window, so a caller pinned to an older
-   *  package version keeps resolving links identically. Optional since R3-480:
+   *  package version keeps resolving links identically. Optional since R3-482:
    *  state one or the other, not both. */
   corpusRoot?: string | null;
   /**
@@ -89,7 +89,7 @@ export type ResolvedLinkTarget =
   | { state: 'invalid' };
 
 /**
- * The bundle root a caller stated, reading **new-then-old** (R3-480, the
+ * The bundle root a caller stated, reading **new-then-old** (R3-482, the
  * `cross_repo_migration` dual-read rule).
  *
  * `undefined` under the new name means "not stated" and falls through to the old
@@ -123,9 +123,9 @@ export function resolveLinkTarget(
   raw: string,
   opts: {
     currentFile?: string;
-    /** The enclosing bundle's root — canonical since R3-480. */
+    /** The enclosing bundle's root — canonical since R3-482. */
     bundleRoot?: string | null;
-    /** @deprecated Pre-R3-480 spelling of `bundleRoot`; read only when
+    /** @deprecated Pre-R3-482 spelling of `bundleRoot`; read only when
      *  `bundleRoot` is absent. */
     corpusRoot?: string | null;
     /** See `LinkSpace.bundleChrooted`. Under a bundle-chroot'd grant `$fs:`
