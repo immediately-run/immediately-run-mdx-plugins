@@ -44,6 +44,14 @@ export type {
 export { isContentEntryFile, isContentEntryPath } from './corpusEntry';
 export type { HeadingAnchorOptions } from './remarkHeadingAnchors';
 
+// R3-531 — inline prose for frontmatter scalar fields: the one synchronous
+// parser behind every list row, card, header and search hit that renders a
+// `title`/`description`/`scope`, with its published parity fixture.
+export { parseInlineProse, plainProse } from './inlineProse';
+export type { InlineProseNode } from './inlineProse';
+export { INLINE_PROSE_FIXTURE } from './inlineProseFixture';
+export type { InlineProseCase } from './inlineProseFixture';
+
 export { default as remarkWikiLinks } from './remarkWikiLinks';
 
 export { default as remarkAdmonitions } from './remarkAdmonitions';
