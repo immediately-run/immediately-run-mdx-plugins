@@ -1,0 +1,29 @@
+---
+title: 'R3-410 — `cache.yml` self-provisioning fails on every fresh org repo — widen the deploy-App secrets'
+id: R3-410
+project: launch-readiness
+status: in-review
+updated: 2026-09-04
+repos:
+  - deploy
+  - new-project-template
+tags:
+  - OP
+  - BUG
+  - roadmap-item
+order: 6
+description: 'The org secrets `DEPLOY_APP_ID`/`DEPLOY_APP_PRIVATE_KEY` are scoped to selected repositories, so a new repo''s mint step is skipped and `configure-pages` fails "Resource not accessible by integration". Fifteen repos needed Pages enabled by hand via the API.'
+topics:
+  - github-actions
+  - pages
+  - cache-zip
+  - org-secrets
+  - operator
+owns: {}
+prs:
+  - https://github.com/immediately-run/new-project-template/pull/16
+  - https://github.com/immediately-run/deploy/pull/36
+  - https://github.com/immediately-run/bundle-picker/pull/2
+depends_on: []
+---
+

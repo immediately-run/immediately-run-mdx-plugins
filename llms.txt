@@ -1,6 +1,6 @@
 # @immediately-run/mdx-plugins
 
-> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import). (v0.5.1)
+> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import). (v0.6.0)
 
 The grammar + resolution canon shared by every immediately.run render path: the transpiler's compiled MDX, the safe renderer, Grove's runtime, and the docs corpus checker all import THESE implementations — a wiki-link, heading anchor, or link resolution means the same byte everywhere.
 
@@ -8,13 +8,16 @@ The grammar + resolution canon shared by every immediately.run render path: the 
 
 - `FrontmatterParseResult` (interface)
 - `HeadingAnchorOptions` (interface)
+- `InlineProseCase` (interface) — One prose string and the derivations every consumer must agree on.
 - `LinkSpace` (interface)
 - `LinkSpaceCase` (interface) — One raw link target and the resolution every consumer must agree on.
 - `SlugParityCase` (interface) — One heading text and the three derivations every consumer must agree on.
 - `FrontmatterValue` (type) — A parsed frontmatter value: a scalar, a list, one level of nesting, or empty.
+- `InlineProseNode` (type) — One inline node of a parsed frontmatter prose string.
 - `ParsedFrontmatter` (type) — One document's parsed frontmatter block.
 - `ResolvedLinkTarget` (type)
 - `FS_PREFIX` (const)
+- `INLINE_PROSE_FIXTURE` (const)
 - `LINK_SPACE_FIXTURE` (const)
 - `SLUG_PARITY_FIXTURE` (const)
 - `headingId` (function) — A heading's canonical id: the section id when the heading is section-like and section ids are enabled, else the GitHub text slug, else `section` — the last because an id has to be a usable anchor target and a heading of only punctuation (or of only non-ASCII text, which `textSlug`'s ASCII `\w` strips entirely) slugs to the empty string.
@@ -22,6 +25,8 @@ The grammar + resolution canon shared by every immediately.run render path: the 
 - `isContentEntryPath` (function) — Is this PATH a corpus entry?
 - `normalizeAbsolute` (function) — Collapse `.`/`..`/empty segments into a clean absolute path.
 - `parseFrontmatter` (function) — Split a `--- … ---` frontmatter block off the top of a document.
+- `parseInlineProse` (function) — Parse a frontmatter prose string into inline nodes: `` `x` `` → code, `**x**` → strong, `*x*`/`_x_` → emphasis, everything else literal text.
+- `plainProse` (function) — The plain form: markers dropped, content kept — `` `x` `` → `x`, `**x**` / `*x*` → `x`, an unbalanced marker kept literally.
 - `remarkAdmonitions` (function) — Remark plugin factory.
 - `remarkHeadingAnchors` (function) — Remark plugin factory.
 - `remarkWikiLinks` (function) — Remark plugin factory.
