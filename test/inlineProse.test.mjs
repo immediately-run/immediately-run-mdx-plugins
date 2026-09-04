@@ -65,6 +65,8 @@ test('the fixture is non-vacuous: it covers every branch of the grammar', () => 
   );
   assert.ok(has((c) => c.tokens.some((n) => n.type === 'emphasis' && n.children.some((k) => k.type === 'code'))), 'emphasis spanning a code span');
   assert.ok(has((c) => /[^ -~]/.test(c.text)), 'a non-ASCII string (the Unicode intraword rule)');
+  assert.ok(has((c) => [...c.text].some((ch) => ch.codePointAt(0) > 0xffff)), 'an astral char (the UTF-16 classification rule)');
+  assert.ok(has((c) => /\\[*_`]/.test(c.text)), 'a backslash-escaped marker');
 });
 
 test('one input is the real R3-410 title, read from the corpus through parseFrontmatter', async () => {

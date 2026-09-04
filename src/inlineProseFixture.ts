@@ -190,6 +190,28 @@ export const INLINE_PROSE_FIXTURE: readonly InlineProseCase[] = [
     why: 'the general emphasis-across-code-span shape the per-segment parser could not build',
   },
   {
+    text: 'a*😀*b',
+    tokens: [
+      { type: 'text', value: 'a' },
+      { type: 'emphasis', children: [{ type: 'text', value: '😀' }] },
+      { type: 'text', value: 'b' },
+    ],
+    plain: 'a😀b',
+    why: 'an astral char is PLAIN to the renderer (it classifies UTF-16 units; surrogates are category Cs) — the run flanks normally (round-2 review)',
+  },
+  {
+    text: 'a \\*b\\* c',
+    tokens: [{ type: 'text', value: 'a *b* c' }],
+    plain: 'a *b* c',
+    why: 'a backslash-escaped marker is literal and keeps no backslash — it never opens or closes (round-2 review)',
+  },
+  {
+    text: '` \t `',
+    tokens: [{ type: 'code', value: '\t' }],
+    plain: '\t',
+    why: 'the code-span strip excludes only SPACE; a tab is content, not padding (round-2 review)',
+  },
+  {
     text: '',
     tokens: [],
     plain: '',

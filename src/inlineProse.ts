@@ -28,14 +28,20 @@
 //   • classification per code point — whitespace (`/\s/`), punctuation
 //     (`/\p{P}|\p{S}/`), or plain — the same predicates as
 //     `micromark-util-character`'s `unicodeWhitespace`/`unicodePunctuation`,
-//     with EOF counting as whitespace;
+//     with EOF counting as whitespace; ASTRAL code points classify as plain,
+//     because micromark classifies UTF-16 code units and a surrogate pair's
+//     halves (category Cs) are plain to it (round-2 review: `a*😀*b`);
+//   • backslash escapes: `\` + ASCII punctuation emits the bare character and
+//     can never open or close a run (round-2 review: `a \*b\* c`);
 //   • run flags computed as `micromark-core-commonmark`'s `tokenizeAttention`
 //     computes `_open`/`_close` (including its marker-adjacent-marker clauses
 //     and the `_` intraword restriction);
 //   • opener matching as `resolveAllAttention` matches it: nearest same-marker
 //     opener that can open, the rule-of-three skip, `use = 2` only when both
 //     runs are longer than one, leftover run halves spliced back with their
-//     ORIGINAL flags and reprocessed, unmatched runs rendered literally.
+//     ORIGINAL flags and reprocessed, unmatched runs rendered literally;
+//   • the code-span strip rule excludes only SPACE (U+0020), not all
+//     whitespace, as CommonMark's does (round-2 review: `` ` \t ` ``).
 //
 // PARITY. `INLINE_PROSE_FIXTURE` (inlineProseFixture.ts) is the published case
 // list; grove asserts `parseInlineProse` against the SDK safe renderer's actual
@@ -55,6 +61,10 @@ const isPunctuation = (ch: string | undefined): boolean => ch !== undefined && /
 /** micromark's `classifyCharacter`: whitespace(1) · punctuation(2) · plain(undefined); EOF is whitespace. */
 function classify(ch: string | undefined): 1 | 2 | undefined {
   if (ch === undefined || isWhitespace(ch)) return 1;
+  // micromark classifies UTF-16 CODE UNITS, so an astral character reaches it
+  // as two unpaired surrogates — category Cs, neither punctuation nor
+  // whitespace. The whole code point is therefore plain to the renderer.
+  if (ch.codePointAt(0)! > 0xffff) return undefined;
   if (isPunctuation(ch)) return 2;
   return undefined;
 }
@@ -84,6 +94,16 @@ function tokenize(s: string): Token[] {
 
   while (i < chars.length) {
     const ch = chars[i];
+    if (ch === '\\' && i + 1 < chars.length && /[\x21-\x2F\x3A-\x40\x5B-\x60\x7B-\x7E]/.test(chars[i + 1])) {
+      // CommonMark backslash escape: `\` + ASCII punctuation emits the bare
+      // character, outside every rule — it can never open or close a run or a
+      // code span.
+      flushText(i);
+      tokens.push({ kind: 'text', value: chars[i + 1] });
+      i += 2;
+      textStart = i;
+      continue;
+    }
     if (ch === '`') {
       const openStart = i;
       while (i < chars.length && chars[i] === '`') i++;
@@ -105,7 +125,10 @@ function tokenize(s: string): Token[] {
       if (closeStart !== -1) {
         flushText(openStart);
         let content = chars.slice(i, closeStart).join('');
-        if (content.length >= 2 && content.startsWith(' ') && content.endsWith(' ') && content.trim() !== '') {
+        // CommonMark strips one leading and one trailing SPACE when both are
+        // present and the content is not all spaces — tabs are content, not
+        // padding.
+        if (content.length >= 2 && content.startsWith(' ') && content.endsWith(' ') && /[^ ]/.test(content)) {
           content = content.slice(1, -1);
         }
         tokens.push({ kind: 'code', value: content });
