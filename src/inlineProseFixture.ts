@@ -12,7 +12,12 @@
 //
 // The cases are chosen where the two could plausibly diverge: the backtick-run
 // length rule, space stripping, the intraword `_` restriction, space-padded `*`,
-// and the unbalanced run that stays literal.
+// the unbalanced run that stays literal — and, since the R3-531 round-1 review,
+// every shape that review proved the first draft wrong on: punctuation-adjacent
+// delimiters, non-ASCII intraword `_`, odd-length runs (`**a***`, `***a***`),
+// emphasis spanning a code span, and digit-wrapped `*`. Each case's `tokens`
+// was transcribed from `parseSafeMdast`'s actual output, not from the spec
+// paragraph.
 
 import type { InlineProseNode } from './inlineProse';
 
@@ -97,6 +102,92 @@ export const INLINE_PROSE_FIXTURE: readonly InlineProseCase[] = [
     tokens: [{ type: 'text', value: 'a * b' }],
     plain: 'a * b',
     why: 'a space-padded asterisk is neither left- nor right-flanking, so literal',
+  },
+  {
+    text: "a*'foo'*b",
+    tokens: [{ type: 'text', value: "a*'foo'*b" }],
+    plain: "a*'foo'*b",
+    why: 'a delimiter followed by punctuation and preceded by a plain char cannot open (round-1 review, R1)',
+  },
+  {
+    text: 'a*(foo)*b',
+    tokens: [{ type: 'text', value: 'a*(foo)*b' }],
+    plain: 'a*(foo)*b',
+    why: 'same flanking failure with round brackets',
+  },
+  {
+    text: '*(foo)*a',
+    tokens: [{ type: 'text', value: '*(foo)*a' }],
+    plain: '*(foo)*a',
+    why: 'the closer sits between punctuation and a plain char, so it cannot close',
+  },
+  {
+    text: 'x*(y)*z',
+    tokens: [{ type: 'text', value: 'x*(y)*z' }],
+    plain: 'x*(y)*z',
+    why: 'both runs are punctuation-flanked on the plain side only — literal',
+  },
+  {
+    text: 'зима_весна_лето',
+    tokens: [{ type: 'text', value: 'зима_весна_лето' }],
+    plain: 'зима_весна_лето',
+    why: 'the intraword `_` restriction is UNICODE-alphanumeric, not ASCII — a Cyrillic letter blocks the run (round-1 review, R1)',
+  },
+  {
+    text: '**a***',
+    tokens: [
+      { type: 'strong', children: [{ type: 'text', value: 'a' }] },
+      { type: 'text', value: '*' },
+    ],
+    plain: 'a*',
+    why: 'a closer longer than the opener matches two markers and leaves its remainder literal (round-1 review, R1)',
+  },
+  {
+    text: '***a***',
+    tokens: [
+      {
+        type: 'emphasis',
+        children: [{ type: 'strong', children: [{ type: 'text', value: 'a' }] }],
+      },
+    ],
+    plain: 'a',
+    why: 'the triple runs resolve as emphasis-wrapped strong via the leftover halves (round-1 review, R1)',
+  },
+  {
+    text: '*`a`*',
+    tokens: [
+      {
+        type: 'emphasis',
+        children: [{ type: 'code', value: 'a' }],
+      },
+    ],
+    plain: 'a',
+    why: 'emphasis SPANS a code span — segmenting code spans before emphasis cannot see this (round-1 review, R1)',
+  },
+  {
+    text: '5*6*7',
+    tokens: [
+      { type: 'text', value: '5' },
+      { type: 'emphasis', children: [{ type: 'text', value: '6' }] },
+      { type: 'text', value: '7' },
+    ],
+    plain: '567',
+    why: 'digit-wrapped single asterisks DO emphasize on the real renderer — pinned as measured, not as the spec paragraph was remembered',
+  },
+  {
+    text: '*a `b` c*',
+    tokens: [
+      {
+        type: 'emphasis',
+        children: [
+          { type: 'text', value: 'a ' },
+          { type: 'code', value: 'b' },
+          { type: 'text', value: ' c' },
+        ],
+      },
+    ],
+    plain: 'a b c',
+    why: 'the general emphasis-across-code-span shape the per-segment parser could not build',
   },
   {
     text: '',

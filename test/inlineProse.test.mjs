@@ -23,6 +23,14 @@ test('the fixture describes THIS package (the canon)', () => {
   }
 });
 
+test('the failure behaviour: a non-string throws, the empty string does not', () => {
+  assert.throws(() => parseInlineProse(42), TypeError, 'parseInlineProse(number)');
+  assert.throws(() => parseInlineProse(null), TypeError, 'parseInlineProse(null)');
+  assert.throws(() => plainProse(undefined), TypeError, 'plainProse(undefined)');
+  assert.deepEqual(parseInlineProse(''), []);
+  assert.equal(plainProse(''), '');
+});
+
 test('plainProse is the marker-free form of parseInlineProse', () => {
   // For every fixture case, the plain form equals the walk of the tokens — the
   // two exports cannot disagree about what is marker and what is content.
@@ -46,6 +54,17 @@ test('the fixture is non-vacuous: it covers every branch of the grammar', () => 
   assert.ok(has((c) => c.tokens.length === 1 && c.tokens[0].type === 'text' && c.tokens[0].value.includes('`')), 'an unbalanced backtick kept literal');
   assert.ok(has((c) => c.text === ''), 'the empty string');
   assert.ok(has((c) => c.tokens.length === 1 && c.tokens[0].type === 'text' && !/[*_`]/.test(c.text)), 'a no-marker string');
+  // The shapes the round-1 review proved a flanking approximation wrong on:
+  // the fixture must keep pinning them, or the parity contract is silent on
+  // exactly where a paraphrase diverges.
+  assert.ok(has((c) => /[\p{P}\p{S}]/u.test(c.text.replace(/\s|[*_`]|[^*_`\s\p{P}\p{S}]/gu, '')) && c.tokens.some((n) => n.type === 'text' && /[*_]/.test(n.value))), 'a punctuation-adjacent delimiter kept literal');
+  assert.ok(
+    has((c) => c.tokens.some((n) => n.type === 'strong' && n.children.some((k) => k.type === 'emphasis'))) ||
+      has((c) => c.tokens.some((n) => n.type === 'emphasis' && n.children.some((k) => k.type === 'strong'))),
+    'strong and emphasis nesting in both directions',
+  );
+  assert.ok(has((c) => c.tokens.some((n) => n.type === 'emphasis' && n.children.some((k) => k.type === 'code'))), 'emphasis spanning a code span');
+  assert.ok(has((c) => /[^ -~]/.test(c.text)), 'a non-ASCII string (the Unicode intraword rule)');
 });
 
 test('one input is the real R3-410 title, read from the corpus through parseFrontmatter', async () => {

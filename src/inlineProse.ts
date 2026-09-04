@@ -10,18 +10,37 @@
 // the slug grammar plays for heading ids (R3-277): a regex in each component is
 // the drift R3-277 closed.
 //
-// WHAT IT SUPPORTS, deliberately: code spans (the CommonMark backtick-run rule),
-// strong and emphasis (`*`/`_`, including emphasis nested in strong). Nothing
+// WHAT IT SUPPORTS, deliberately: code spans (the CommonMark backtick-run rule)
+// and strong/emphasis by the CommonMark delimiter rule, including emphasis
+// nested in strong and emphasis spanning a code span (`*a \`b\` c*`). Nothing
 // else is inline prose in a title: no links, no images, no HTML, no JSX — a
 // title is not a body (TRUST_MODES_SPEC §5.1 keeps the body grammar in the two
-// render standards). Unknown or unbalanced markers are LITERAL text, which is
-// also what CommonMark does with an unclosed backtick run. A run of three or
-// more `*`/`_` is not strong-or-emphasis here (that would be `***` strong-em,
-// which no corpus field uses) and stays literal.
+// render standards).
+//
+// THE DELIMITER RULE IS A PORT, NOT A PARAPHRASE. The review gate (R3-531
+// round 1) rejected a hand-written flanking approximation: it disagreed with
+// the safe renderer on punctuation-adjacent delimiters, non-ASCII intraword
+// `_`, and odd-length runs — nine shapes, verified against the real micromark
+// path, all latent on today's corpus. What ships now is micromark's attention
+// algorithm restated over a token list, so the canon cannot drift from the
+// renderer it is parity-bound to:
+//
+//   • classification per code point — whitespace (`/\s/`), punctuation
+//     (`/\p{P}|\p{S}/`), or plain — the same predicates as
+//     `micromark-util-character`'s `unicodeWhitespace`/`unicodePunctuation`,
+//     with EOF counting as whitespace;
+//   • run flags computed as `micromark-core-commonmark`'s `tokenizeAttention`
+//     computes `_open`/`_close` (including its marker-adjacent-marker clauses
+//     and the `_` intraword restriction);
+//   • opener matching as `resolveAllAttention` matches it: nearest same-marker
+//     opener that can open, the rule-of-three skip, `use = 2` only when both
+//     runs are longer than one, leftover run halves spliced back with their
+//     ORIGINAL flags and reprocessed, unmatched runs rendered literally.
 //
 // PARITY. `INLINE_PROSE_FIXTURE` (inlineProseFixture.ts) is the published case
 // list; grove asserts `parseInlineProse` against the SDK safe renderer's actual
-// micromark path over the same cases, so the two cannot drift silently.
+// micromark path over the same cases — including every shape this port was
+// written to get right — so the two cannot drift silently.
 
 /** One inline node of a parsed frontmatter prose string. */
 export type InlineProseNode =
@@ -30,130 +49,166 @@ export type InlineProseNode =
   | { type: 'strong'; children: InlineProseNode[] }
   | { type: 'emphasis'; children: InlineProseNode[] };
 
-const isWhitespace = (ch: string | undefined): boolean => ch !== undefined && /\s/.test(ch);
-const isAlnum = (ch: string | undefined): boolean => ch !== undefined && /[a-zA-Z0-9]/.test(ch);
+const isWhitespace = (ch: string | undefined): boolean => ch !== undefined && /\s/u.test(ch);
+const isPunctuation = (ch: string | undefined): boolean => ch !== undefined && /[\p{P}\p{S}]/u.test(ch);
 
-/**
- * Split around code spans first (CommonMark: a backtick run closes only on a run
- * of the same length; inner one-space stripping when both edges have a space and
- * the content is not all spaces). A run with no matching closer stays literal
- * text — it flows back into the surrounding segment.
- */
-function segmentCodeSpans(s: string): Array<{ kind: 'code' | 'text'; value: string }> {
-  const segs: Array<{ kind: 'code' | 'text'; value: string }> = [];
-  let textStart = 0;
-  let i = 0;
-  while (i < s.length) {
-    if (s[i] !== '`') {
-      i++;
-      continue;
-    }
-    const openStart = i;
-    while (i < s.length && s[i] === '`') i++;
-    const runLen = i - openStart;
-    let j = i;
-    let closeStart = -1;
-    while (j < s.length) {
-      if (s[j] === '`') {
-        const runStart = j;
-        while (j < s.length && s[j] === '`') j++;
-        if (j - runStart === runLen) {
-          closeStart = runStart;
-          break;
-        }
-      } else {
-        j++;
-      }
-    }
-    if (closeStart === -1) continue;
-    if (textStart < openStart) segs.push({ kind: 'text', value: s.slice(textStart, openStart) });
-    let content = s.slice(i, closeStart);
-    if (content.length >= 2 && content.startsWith(' ') && content.endsWith(' ') && content.trim() !== '') {
-      content = content.slice(1, -1);
-    }
-    segs.push({ kind: 'code', value: content });
-    i = closeStart + runLen;
-    textStart = i;
-  }
-  if (textStart < s.length) segs.push({ kind: 'text', value: s.slice(textStart) });
-  return segs;
+/** micromark's `classifyCharacter`: whitespace(1) · punctuation(2) · plain(undefined); EOF is whitespace. */
+function classify(ch: string | undefined): 1 | 2 | undefined {
+  if (ch === undefined || isWhitespace(ch)) return 1;
+  if (isPunctuation(ch)) return 2;
+  return undefined;
 }
 
-/** Merge adjacent text nodes so output shape matches a renderer's text runs. */
-function mergeText(nodes: InlineProseNode[]): InlineProseNode[] {
+/** A token of the intermediate list: literal text, a code span, a delimiter run, or a resolved group. */
+type Token =
+  | { kind: 'text'; value: string }
+  | { kind: 'code'; value: string }
+  | { kind: 'del'; ch: '*' | '_'; count: number; canOpen: boolean; canClose: boolean }
+  | { kind: 'group'; group: InlineProseNode };
+
+/**
+ * Scan the string left to right into tokens: code spans close on a backtick run
+ * of the same length (one-space edge stripping when both edges have a space and
+ * the content is not all spaces; an unclosed run stays text), delimiter runs
+ * carry the micromark flags, everything else accumulates as text.
+ */
+function tokenize(s: string): Token[] {
+  const chars = [...s]; // code points, so astral characters classify correctly
+  const tokens: Token[] = [];
+  let textStart = 0;
+  let i = 0;
+
+  const flushText = (end: number) => {
+    if (textStart < end) tokens.push({ kind: 'text', value: chars.slice(textStart, end).join('') });
+  };
+
+  while (i < chars.length) {
+    const ch = chars[i];
+    if (ch === '`') {
+      const openStart = i;
+      while (i < chars.length && chars[i] === '`') i++;
+      const runLen = i - openStart;
+      let j = i;
+      let closeStart = -1;
+      while (j < chars.length) {
+        if (chars[j] === '`') {
+          const runStart = j;
+          while (j < chars.length && chars[j] === '`') j++;
+          if (j - runStart === runLen) {
+            closeStart = runStart;
+            break;
+          }
+        } else {
+          j++;
+        }
+      }
+      if (closeStart !== -1) {
+        flushText(openStart);
+        let content = chars.slice(i, closeStart).join('');
+        if (content.length >= 2 && content.startsWith(' ') && content.endsWith(' ') && content.trim() !== '') {
+          content = content.slice(1, -1);
+        }
+        tokens.push({ kind: 'code', value: content });
+        i = closeStart + runLen;
+        textStart = i;
+      }
+      // An unclosed run stays literal: it is simply not emitted, so the
+      // backticks flow into the surrounding text.
+      continue;
+    }
+    if (ch === '*' || ch === '_') {
+      const runStart = i;
+      while (i < chars.length && chars[i] === ch) i++;
+      flushText(runStart);
+      const before = classify(runStart > 0 ? chars[runStart - 1] : undefined);
+      const after = classify(i < chars.length ? chars[i] : undefined);
+      const beforeRaw = runStart > 0 ? chars[runStart - 1] : undefined;
+      const afterRaw = i < chars.length ? chars[i] : undefined;
+      const isMarker = (c: string | undefined): boolean => c === '*' || c === '_';
+      // micromark `tokenizeAttention`, verbatim: `undefined` means "a plain
+      // character this side of the run", `1` is whitespace, `2` punctuation,
+      // and a marker adjacent to the run counts as flanking.
+      const open = after === undefined || (after === 2 && before !== undefined) || isMarker(afterRaw);
+      const close = before === undefined || (before === 2 && after !== undefined) || isMarker(beforeRaw);
+      tokens.push({
+        kind: 'del',
+        ch,
+        count: i - runStart,
+        canOpen: ch === '*' ? open : open && (before !== undefined || !close),
+        canClose: ch === '*' ? close : close && (after !== undefined || !open),
+      });
+      textStart = i;
+      continue;
+    }
+    i++;
+  }
+  flushText(chars.length);
+  return tokens;
+}
+
+/** micromark `resolveAllAttention`, restated over the token list. */
+function resolveAttention(tokens: Token[]): Token[] {
+  const nodes = [...tokens];
+  let c = 0;
+  while (c < nodes.length) {
+    const closer = nodes[c];
+    if (closer.kind !== 'del' || !closer.canClose) {
+      c++;
+      continue;
+    }
+    let matched = false;
+    // Nearest same-marker opener that can open, with the rule-of-three skip.
+    for (let o = c - 1; o >= 0; o--) {
+      const opener = nodes[o];
+      if (opener.kind !== 'del' || !opener.canOpen || opener.ch !== closer.ch) continue;
+      if (
+        (opener.canClose || closer.canOpen) &&
+        closer.count % 3 !== 0 &&
+        (opener.count + closer.count) % 3 === 0
+      ) {
+        continue;
+      }
+      // Match. Two markers on each side is strong; one is emphasis.
+      const use = opener.count > 1 && closer.count > 1 ? 2 : 1;
+      // The content resolves first, exactly as micromark resolves `insideSpan`
+      // over the events between opener and closer before wrapping the group.
+      const inner = toProse(resolveAttention(nodes.slice(o + 1, c)));
+      const group: Token = {
+        kind: 'group',
+        group: use > 1 ? { type: 'strong', children: inner } : { type: 'emphasis', children: inner },
+      };
+      const next: Token[] = [];
+      // Leftover run halves keep the ORIGINAL run's flags and are reprocessed.
+      if (opener.count - use > 0) next.push({ ...opener, count: opener.count - use });
+      next.push(group);
+      if (closer.count - use > 0) next.push({ ...closer, count: closer.count - use });
+      nodes.splice(o, c - o + 1, ...next);
+      // Reprocess a leftover closer; otherwise continue past the group.
+      c = o + (opener.count - use > 0 ? 1 : 0) + 1;
+      matched = true;
+      break;
+    }
+    if (!matched) c++;
+  }
+  return nodes;
+}
+
+/** Groups become nodes; unmatched runs become their literal characters; text runs merge. */
+function toProse(tokens: Token[]): InlineProseNode[] {
+  const out: InlineProseNode[] = [];
+  for (const t of tokens) {
+    if (t.kind === 'group') out.push(t.group);
+    else if (t.kind === 'text') out.push({ type: 'text', value: t.value });
+    else if (t.kind === 'code') out.push({ type: 'code', value: t.value });
+    else out.push({ type: 'text', value: t.ch.repeat(t.count) });
+  }
   const merged: InlineProseNode[] = [];
-  for (const n of nodes) {
+  for (const n of out) {
     const last = merged[merged.length - 1];
     if (n.type === 'text' && last?.type === 'text') last.value += n.value;
     else merged.push(n);
   }
   return merged;
-}
-
-/**
- * Strong/emphasis over one non-code segment: a delimiter run of length 2 is
- * strong, length 1 is emphasis. Flanking rules, subset form: an opener needs a
- * non-whitespace next char; a closer needs a non-whitespace prev char; `_` adds
- * the CommonMark intraword restriction (no `foo_bar_baz` emphasis). An opener
- * with no matching closer renders as its literal characters.
- */
-function parseEmphasis(s: string): InlineProseNode[] {
-  const out: InlineProseNode[] = [];
-  let litStart = 0;
-  let i = 0;
-
-  const canOpen = (pos: number, ch: string, len: number): boolean => {
-    const next = s[pos + len];
-    if (next === undefined || isWhitespace(next)) return false;
-    if (ch === '_' && isAlnum(s[pos - 1])) return false;
-    return true;
-  };
-  const canClose = (pos: number, ch: string, len: number): boolean => {
-    const prev = s[pos - 1];
-    if (prev === undefined || isWhitespace(prev)) return false;
-    if (ch === '_' && isAlnum(s[pos + len])) return false;
-    return true;
-  };
-
-  while (i < s.length) {
-    const ch = s[i];
-    if (ch !== '*' && ch !== '_') {
-      i++;
-      continue;
-    }
-    let j = i;
-    while (j < s.length && s[j] === ch) j++;
-    const runLen = j - i;
-    if (runLen > 2 || !canOpen(i, ch, runLen)) {
-      i = j;
-      continue;
-    }
-    let k = j;
-    let closePos = -1;
-    while (k < s.length) {
-      if (s[k] === ch) {
-        const runStart = k;
-        while (k < s.length && s[k] === ch) k++;
-        if (k - runStart === runLen && canClose(runStart, ch, runLen)) {
-          closePos = runStart;
-          break;
-        }
-      } else {
-        k++;
-      }
-    }
-    if (closePos === -1) {
-      i = j;
-      continue;
-    }
-    if (litStart < i) out.push({ type: 'text', value: s.slice(litStart, i) });
-    const inner = parseEmphasis(s.slice(j, closePos));
-    out.push(runLen === 2 ? { type: 'strong', children: inner } : { type: 'emphasis', children: inner });
-    i = closePos + runLen;
-    litStart = i;
-  }
-  if (litStart < s.length) out.push({ type: 'text', value: s.slice(litStart) });
-  return mergeText(out);
 }
 
 /**
@@ -166,12 +221,7 @@ function parseEmphasis(s: string): InlineProseNode[] {
 export function parseInlineProse(s: string): InlineProseNode[] {
   if (typeof s !== 'string') throw new TypeError('parseInlineProse: expected a string');
   if (s === '') return [];
-  const out: InlineProseNode[] = [];
-  for (const seg of segmentCodeSpans(s)) {
-    if (seg.kind === 'code') out.push({ type: 'code', value: seg.value });
-    else out.push(...parseEmphasis(seg.value));
-  }
-  return mergeText(out);
+  return toProse(resolveAttention(tokenize(s)));
 }
 
 /**
