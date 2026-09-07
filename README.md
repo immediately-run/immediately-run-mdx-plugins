@@ -36,6 +36,8 @@ import {
   remarkAdmonitions,     // () => transformer
   textSlug,              // (text) => GitHub-compatible slug
   sectionId,             // (text) => 'sec-8-9' | null (prose-independent)
+  parseBundleLayout,     // (layout: unknown) => { layout, diagnostics } — the §4a layout grammar
+  pruneLayoutToView,     // (layout, subtree) => BundleLayout — the §4a.3 view prune
 } from '@immediately-run/mdx-plugins';
 ```
 

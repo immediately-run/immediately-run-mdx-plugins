@@ -1,32 +1,51 @@
 # @immediately-run/mdx-plugins
 
-> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import). (v0.6.0)
+> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import). (v0.7.0)
 
 The grammar + resolution canon shared by every immediately.run render path: the transpiler's compiled MDX, the safe renderer, Grove's runtime, and the docs corpus checker all import THESE implementations — a wiki-link, heading anchor, or link resolution means the same byte everywhere.
 
 ## Exports
 
+- `BundleLayout` (interface)
+- `BundleLayoutCase` (interface) — One layout block and the parse every consumer must agree on.
 - `FrontmatterParseResult` (interface)
 - `HeadingAnchorOptions` (interface)
 - `InlineProseCase` (interface) — One prose string and the derivations every consumer must agree on.
+- `LayoutDiagnostic` (interface)
+- `LayoutFrom` (interface) — An owner-pinned published default (`§4a.1`) instead of an own `recordSets`/`tree`.
+- `LayoutLimits` (interface) — The §4a.5 bounds, one name each.
+- `LayoutParseResult` (interface)
 - `LinkSpace` (interface)
 - `LinkSpaceCase` (interface) — One raw link target and the resolution every consumer must agree on.
+- `RecordId` (interface) — The category an `id` derives a record's identity from: the file name's stem, or a dotted frontmatter path.
+- `RecordSet` (interface) — One record set — a directory of records the bundle contains.
 - `SlugParityCase` (interface) — One heading text and the three derivations every consumer must agree on.
+- `StatusField` (interface) — The `status` well-known field, which declares its lifecycle `values` and an optional `terminal` — the value that ends the lifecycle and, when the owner's convention is a file move, the record set it moves to.
+- `TreeEntry` (interface) — One `tree` entry — a human- and agent-readable directory description.
+- `WellKnownField` (interface) — One well-known record field (a `from` path, or a bare string as shorthand).
 - `FrontmatterValue` (type) — A parsed frontmatter value: a scalar, a list, one level of nesting, or empty.
 - `InlineProseNode` (type) — One inline node of a parsed frontmatter prose string.
+- `LayoutDiagnosticCode` (type) — A closed, typed diagnostic code — the host maps these to its `MarkerRejection` diagnostics, the checker prints them.
 - `ParsedFrontmatter` (type) — One document's parsed frontmatter block.
+- `RecordGrammar` (type) — The closed record grammars of §4a.1/§4.1: `mdx-frontmatter` (one record per MDX file, fields from frontmatter), `json-file` (one record per JSON file), and `opaque` (a consumer may list but never parse — the media-type default).
 - `ResolvedLinkTarget` (type)
+- `WellKnownFields` (type) — The closed well-known vocabulary (§4a.1): `title`, `body`, `status`, `order`, `labels`, `date`, `summary`.
+- `BUNDLE_LAYOUT_FIXTURE` (const)
 - `FS_PREFIX` (const)
 - `INLINE_PROSE_FIXTURE` (const)
+- `LAYOUT_GRAMMAR_VERSION` (const)
+- `LAYOUT_LIMITS` (const)
 - `LINK_SPACE_FIXTURE` (const)
 - `SLUG_PARITY_FIXTURE` (const)
 - `headingId` (function) — A heading's canonical id: the section id when the heading is section-like and section ids are enabled, else the GitHub text slug, else `section` — the last because an id has to be a usable anchor target and a heading of only punctuation (or of only non-ASCII text, which `textSlug`'s ASCII `\w` strips entirely) slugs to the empty string.
 - `isContentEntryFile` (function) — Is this file name a corpus ENTRY — a page a reader can navigate to?
 - `isContentEntryPath` (function) — Is this PATH a corpus entry?
 - `normalizeAbsolute` (function) — Collapse `.`/`..`/empty segments into a clean absolute path.
+- `parseBundleLayout` (function) — Parse a marker's `layout` block into its typed description — or `null` plus diagnostics when the block is malformed or unknown-`version`.
 - `parseFrontmatter` (function) — Split a `--- … ---` frontmatter block off the top of a document.
 - `parseInlineProse` (function) — Parse a frontmatter prose string into inline nodes: `` `x` `` → code, `**x**` → strong, `*x*`/`_x_` → emphasis, everything else literal text.
 - `plainProse` (function) — The plain form: markers dropped, content kept — `` `x` `` → `x`, `**x**` / `*x*` → `x`, an unbalanced marker kept literally.
+- `pruneLayoutToView` (function) — Prune a parsed layout down to a consumer's `subtree` view (`§4a.3`, G-BE-19).
 - `remarkAdmonitions` (function) — Remark plugin factory.
 - `remarkHeadingAnchors` (function) — Remark plugin factory.
 - `remarkWikiLinks` (function) — Remark plugin factory.

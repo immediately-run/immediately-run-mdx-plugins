@@ -44,6 +44,30 @@ export type {
 export { isContentEntryFile, isContentEntryPath } from './corpusEntry';
 export type { HeadingAnchorOptions } from './remarkHeadingAnchors';
 
+// R3-544 — the bundle layout grammar (BUNDLE_EMBEDDING_SPEC §4a): one parser every
+// consumer (docs checker, host mount resolution, projecting app) reads the owner's
+// `layout` declaration with. `pruneLayoutToView` is the §4a.3 view prune the host
+// applies before handing a subtree-scoped consumer its mount descriptor.
+export { parseBundleLayout, pruneLayoutToView } from './bundleLayout';
+export { LAYOUT_GRAMMAR_VERSION, LAYOUT_LIMITS } from './bundleLayout';
+export type {
+  BundleLayout,
+  LayoutDiagnostic,
+  LayoutDiagnosticCode,
+  LayoutFrom,
+  LayoutLimits,
+  LayoutParseResult,
+  RecordGrammar,
+  RecordId,
+  RecordSet,
+  StatusField,
+  TreeEntry,
+  WellKnownField,
+  WellKnownFields,
+} from './bundleLayout';
+export { BUNDLE_LAYOUT_FIXTURE } from './bundleLayoutFixture';
+export type { BundleLayoutCase } from './bundleLayoutFixture';
+
 // R3-531 — inline prose for frontmatter scalar fields: the one synchronous
 // parser behind every list row, card, header and search hit that renders a
 // `title`/`description`/`scope`, with its published parity fixture.
