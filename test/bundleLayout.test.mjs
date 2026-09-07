@@ -1,63 +1,16 @@
 // R3-544 — the bundle layout grammar: parseBundleLayout + pruneLayoutToView over
-// the REAL producer (BUNDLE_EMBEDDING_SPEC §4a.1, copied verbatim), each §4a.5
-// bound exceeded by one, the reserved-key namespaces, schema/mediaType refusals, and
-// the subtree prune.
+// the REAL producer (BUNDLE_EMBEDDING_SPEC §4a.1 — the fixture's first case, read
+// from BUNDLE_LAYOUT_FIXTURE so the block has exactly one home), the reserved-key
+// namespaces, schema/mediaType refusals, and the subtree prune. Each §4a.5 bound
+// is a bundleLayoutFixture case (and asserted here directly).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBundleLayout, pruneLayoutToView, LAYOUT_LIMITS } from '../dist/index.js';
+import { BUNDLE_LAYOUT_FIXTURE, parseBundleLayout, pruneLayoutToView } from '../dist/index.js';
 
-// The `layout` value of `docs/content/immediately.run.json` as R3-545 will commit
-// it — copied VERBATIM from BUNDLE_EMBEDDING_SPEC §4a.1 (not typed by taste, so the
-// real grammar is the input).
-const WIKI_LAYOUT = () => ({
-  version: 1,
-  recordSets: {
-    'roadmap-items': {
-      dir: '/roadmap',
-      select: 'R3-*.mdx',
-      record: 'mdx-frontmatter',
-      schema: '/roadmap/item.schema.json',
-      id: { from: 'filename' },
-      unique: ['roadmap-archive'],
-      wellKnown: {
-        title: 'frontmatter.title',
-        status: {
-          from: 'frontmatter.status',
-          values: ['available', 'in-progress', 'in-review', 'deferred', 'deprioritized', 'superseded'],
-          terminal: { value: 'done', movesTo: 'roadmap-archive' },
-        },
-        order: { from: 'frontmatter.order', meaning: 'execution' },
-        body: 'content',
-      },
-      writable: [],
-    },
-    'roadmap-archive': {
-      dir: '/roadmap/archive',
-      select: 'R3-*.mdx',
-      record: 'mdx-frontmatter',
-      schema: '/roadmap/item.schema.json',
-      id: { from: 'filename' },
-      frozen: true,
-    },
-    figures: {
-      dir: '/specs/figures',
-      select: '*.png',
-      mediaType: 'image/png',
-      id: { from: 'filename' },
-    },
-  },
-  tree: {
-    '/roadmap': { purpose: 'the live engineering roadmap, one file per work item' },
-    '/roadmap/archive': { purpose: 'done items, moved here by the owner\u2019s tooling' },
-    '/roadmap/board': { purpose: 'the kanban view of /roadmap', bundle: true },
-    '/specs': { purpose: 'one spec per area' },
-    '/context': { purpose: 'the resident context set and the routed documents' },
-  },
-});
+const WIKI_LAYOUT = BUNDLE_LAYOUT_FIXTURE.find((c) => c.name === 'wiki layout (§4a.1)').layout;
 
 test('(a) the real §4a.1 block parses with zero diagnostics and round-trips', () => {
-  const input = WIKI_LAYOUT();
-  const { layout, diagnostics } = parseBundleLayout(input);
+  const { layout, diagnostics } = parseBundleLayout(WIKI_LAYOUT);
   assert.deepEqual(diagnostics, []);
   assert.ok(layout, 'layout is non-null');
   assert.equal(layout.version, 1);
@@ -77,50 +30,23 @@ test('(a) the real §4a.1 block parses with zero diagnostics and round-trips', (
   // round-trip: the canonical serialization re-parses identically.
   const again = parseBundleLayout(JSON.parse(JSON.stringify(layout)));
   assert.deepEqual(again.diagnostics, []);
-  assert.deepEqual(Object.keys(again.layout.recordSets).sort(), Object.keys(layout.recordSets).sort());
+  assert.deepEqual(again.layout, layout);
 });
 
 test('(b) each §4a.5 bound, exceeded by one, yields exactly its diagnostic and layout:null', () => {
-  const expectLimit = (layout, code) => {
-    const { layout: out, diagnostics } = parseBundleLayout(layout);
-    assert.equal(out, null, `${code}: layout is null`);
-    assert.deepEqual(diagnostics.map((d) => d.code), [code]);
-  };
-
-  const recordSets = {};
-  for (let i = 0; i < LAYOUT_LIMITS.recordSets + 1; i++) recordSets[`set${i}`] = { dir: `/d${i}`, record: 'opaque' };
-  expectLimit({ version: 1, recordSets }, 'limit-record-sets');
-
-  const tree = {};
-  for (let i = 0; i < LAYOUT_LIMITS.treeEntries + 1; i++) tree[`/t${i}`] = { purpose: 'x' };
-  expectLimit({ version: 1, recordSets: {}, tree }, 'limit-tree-entries');
-
-  expectLimit(
-    { version: 1, recordSets: { a: { dir: '/a', select: 'x'.repeat(LAYOUT_LIMITS.selectGlobLength + 1), record: 'opaque' } } },
-    'limit-select-glob',
-  );
-
-  expectLimit(
-    {
-      version: 1,
-      recordSets: {
-        a: { dir: '/a', record: 'opaque', unique: Array.from({ length: LAYOUT_LIMITS.uniqueFanOut + 1 }, (_, i) => `s${i}`) },
-      },
-    },
-    'limit-unique',
-  );
-
-  const wellKnown = {};
-  for (let i = 0; i < LAYOUT_LIMITS.wellKnownNames + 1; i++) wellKnown[`k${i}`] = 'frontmatter.title';
-  expectLimit(
-    { version: 1, recordSets: { a: { dir: '/a', record: 'mdx-frontmatter', wellKnown } } },
-    'limit-well-known',
-  );
+  const limitCodes = ['limit-record-sets', 'limit-tree-entries', 'limit-select-glob', 'limit-unique', 'limit-well-known'];
+  const cases = BUNDLE_LAYOUT_FIXTURE.filter((c) => c.diagnostics.some((d) => limitCodes.includes(d)));
+  assert.equal(cases.length, 5, 'all five bounds are fixture cases');
+  for (const c of cases) {
+    const { layout, diagnostics } = parseBundleLayout(c.layout);
+    assert.equal(layout, null, `${c.name}: layout is null`);
+    assert.deepEqual(diagnostics.map((d) => d.code), c.diagnostics, `${c.name}: diagnostic`);
+  }
 });
 
 test('(c) __proto__ as record-set name, wellKnown key, and from segment each refuse', () => {
   const byName = JSON.parse(
-    '{"version":1,"recordSets":{"__proto__":{"dir":"/x","record":"opaque"},"ok":{"dir":"/y","record":"opaque"}}}',
+    '{"version":1,"recordSets":{"__proto__":{"dir":"/x","select":"*","record":"opaque"},"ok":{"dir":"/y","select":"*","record":"opaque"}}}',
   );
   let r = parseBundleLayout(byName);
   assert.ok(r.layout, 'record-set name: layout survives');
@@ -128,7 +54,7 @@ test('(c) __proto__ as record-set name, wellKnown key, and from segment each ref
   assert.deepEqual(r.diagnostics.map((d) => d.code), ['reserved-key']);
 
   const byKnown = JSON.parse(
-    '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","record":"mdx-frontmatter","wellKnown":{"__proto__":"frontmatter.title"}}}}',
+    '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","select":"R3-*.mdx","record":"mdx-frontmatter","wellKnown":{"__proto__":"frontmatter.title"}}}}',
   );
   r = parseBundleLayout(byKnown);
   assert.ok(r.layout, 'wellKnown key: layout survives');
@@ -136,7 +62,7 @@ test('(c) __proto__ as record-set name, wellKnown key, and from segment each ref
   assert.deepEqual(r.diagnostics.map((d) => d.code), ['reserved-key']);
 
   const byFrom = JSON.parse(
-    '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","record":"mdx-frontmatter","id":{"from":"frontmatter.__proto__"}}}}',
+    '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","select":"R3-*.mdx","record":"mdx-frontmatter","id":{"from":"frontmatter.__proto__"}}}}',
   );
   r = parseBundleLayout(byFrom);
   assert.ok(r.layout, 'from segment: layout survives');
@@ -147,7 +73,7 @@ test('(c) __proto__ as record-set name, wellKnown key, and from segment each ref
 test('(d) a $fs: schema path is refused', () => {
   const r = parseBundleLayout({
     version: 1,
-    recordSets: { roadmap: { dir: '/roadmap', record: 'mdx-frontmatter', schema: '$fs:/x.json' } },
+    recordSets: { roadmap: { dir: '/roadmap', select: 'R3-*.mdx', record: 'mdx-frontmatter', schema: '$fs:/x.json' } },
   });
   assert.ok(r.layout);
   assert.deepEqual(Object.keys(r.layout.recordSets), []);
@@ -179,7 +105,7 @@ test('(e) mediaType: parameters/uppercase refuse, single and list accept', () =>
 });
 
 test('(f) pruneLayoutToView("/roadmap") drops figures + out-of-view tree, keeps both roadmap sets and unique', () => {
-  const { layout } = parseBundleLayout(WIKI_LAYOUT());
+  const { layout } = parseBundleLayout(WIKI_LAYOUT);
   const pruned = pruneLayoutToView(layout, '/roadmap');
 
   assert.deepEqual(Object.keys(pruned.recordSets).sort(), ['roadmap-archive', 'roadmap-items']);
@@ -194,11 +120,31 @@ test('(f2) a unique reference to a pruned-out set is dropped', () => {
   const { layout } = parseBundleLayout({
     version: 1,
     recordSets: {
-      live: { dir: '/roadmap', record: 'mdx-frontmatter', unique: ['archive', 'figures'] },
-      archive: { dir: '/roadmap/archive', record: 'mdx-frontmatter' },
-      figures: { dir: '/specs/figures', record: 'opaque', mediaType: 'image/png' },
+      live: { dir: '/roadmap', select: '*.mdx', record: 'mdx-frontmatter', unique: ['archive', 'figures'] },
+      archive: { dir: '/roadmap/archive', select: '*.mdx', record: 'mdx-frontmatter' },
+      figures: { dir: '/specs/figures', select: '*.png', mediaType: 'image/png' },
     },
   });
   const pruned = pruneLayoutToView(layout, '/roadmap');
   assert.deepEqual(pruned.recordSets.live.unique, ['archive']);
+});
+
+test('(f3) a root view keeps everything, and an all-pruned unique omits the key', () => {
+  const { layout } = parseBundleLayout({
+    version: 1,
+    recordSets: {
+      live: { dir: '/roadmap', select: '*.mdx', record: 'mdx-frontmatter', unique: ['figures'] },
+      figures: { dir: '/specs/figures', select: '*.png', mediaType: 'image/png' },
+    },
+    tree: { '/roadmap': { purpose: 'x' } },
+  });
+
+  // root view: nothing is dropped.
+  const root = pruneLayoutToView(layout, '/');
+  assert.deepEqual(Object.keys(root.recordSets).sort(), ['figures', 'live']);
+  assert.deepEqual(Object.keys(root.tree), ['/roadmap']);
+
+  // an all-pruned unique leaves no `unique` key.
+  const scoped = pruneLayoutToView(layout, '/roadmap');
+  assert.ok(!('unique' in scoped.recordSets.live), 'unique key is omitted when every reference is pruned out');
 });

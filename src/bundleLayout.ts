@@ -166,7 +166,10 @@ export type LayoutDiagnosticCode =
   | 'bad-frozen'
   | 'bad-tree'
   | 'bad-tree-entry'
-  | 'bad-layout-from';
+  | 'bad-layout-from'
+  | 'missing-select'
+  | 'missing-record'
+  | 'layout-from-conflict';
 
 export interface LayoutDiagnostic {
   code: LayoutDiagnosticCode;
@@ -260,6 +263,16 @@ const isMediaType = (t: unknown): t is string => {
 
 const RECORD_GRAMMARS = new Set<RecordGrammar>(['mdx-frontmatter', 'json-file', 'opaque']);
 
+/** The §4a.1 closed well-known vocabulary — `title`, `body`, `status`, `order`,
+ *  `labels`, `date`, `summary`. A generic consumer may rely on these without
+ *  reading the schema; anything else is not a well-known field and is refused. */
+const WELL_KNOWN_FIELDS = new Set(['title', 'body', 'status', 'order', 'labels', 'date', 'summary']);
+
+/** The only `from` sources a well-known field may name on an OPAQUE record set
+ *  (§4a.1 — there is no record to read, so the source is `filename` or file
+ *  metadata `mtime`/`size`, never `frontmatter.*`). */
+const OPAQUE_WELL_KNOWN_SOURCES = new Set(['filename', 'mtime', 'size']);
+
 const diag = (code: LayoutDiagnosticCode, path: string, message: string): LayoutDiagnostic => ({
   code,
   path,
@@ -267,6 +280,7 @@ const diag = (code: LayoutDiagnosticCode, path: string, message: string): Layout
 });
 
 function parseWellKnownField(
+  name: string,
   value: unknown,
   path: string,
   diagnostics: LayoutDiagnostic[],
@@ -282,7 +296,14 @@ function parseWellKnownField(
   const fromPath = validateFromPath(value.from, `${path}.from`, 'bad-well-known', diagnostics);
   if (fromPath === null) return null;
   const out: WellKnownField | StatusField = { from: fromPath };
+  // §4a.1 — the extra structure is per-field, not portable: `values`/`terminal`
+  // belong to `status` only, `meaning` to `order` only. Structure on the wrong
+  // field is refused (the closed vocabulary is a shape promise, not a hint).
   if ('values' in value) {
+    if (name !== 'status') {
+      diagnostics.push(diag('bad-well-known', `${path}.values`, '`values` belongs to the status field only'));
+      return null;
+    }
     const values = value.values;
     if (!Array.isArray(values) || !values.every((x) => typeof x === 'string')) {
       diagnostics.push(diag('bad-well-known', `${path}.values`, 'status values must be an array of strings'));
@@ -291,6 +312,10 @@ function parseWellKnownField(
     (out as StatusField).values = values as string[];
   }
   if ('terminal' in value) {
+    if (name !== 'status') {
+      diagnostics.push(diag('bad-well-known', `${path}.terminal`, '`terminal` belongs to the status field only'));
+      return null;
+    }
     const terminal = value.terminal;
     if (!isObject(terminal)) {
       diagnostics.push(diag('bad-well-known', `${path}.terminal`, 'terminal must be an object'));
@@ -311,6 +336,10 @@ function parseWellKnownField(
     (out as StatusField).terminal = { value: terminal.value, movesTo: terminal.movesTo };
   }
   if ('meaning' in value) {
+    if (name !== 'order') {
+      diagnostics.push(diag('bad-well-known', `${path}.meaning`, '`meaning` belongs to the order field only'));
+      return null;
+    }
     const meaning = value.meaning;
     if (meaning !== 'execution' && meaning !== 'display') {
       diagnostics.push(diag('bad-well-known', `${path}.meaning`, 'order meaning must be `execution` or `display`'));
@@ -339,15 +368,17 @@ function parseRecordSet(
 
   const out: RecordSet = { dir: normalizeAbsolute(value.dir) };
 
-  if (value.select !== undefined) {
-    if (!cleanSelect(value.select)) {
-      diagnostics.push(
-        diag('bad-select', `${path}.select`, 'select must be a basename glob with no separator, .. or NUL'),
-      );
-      return null;
-    }
-    out.select = value.select;
+  if (value.select === undefined) {
+    diagnostics.push(diag('missing-select', `${path}.select`, 'a record set must declare a select glob'));
+    return null;
   }
+  if (!cleanSelect(value.select)) {
+    diagnostics.push(
+      diag('bad-select', `${path}.select`, 'select must be a basename glob with no separator, .. or NUL'),
+    );
+    return null;
+  }
+  out.select = value.select;
   if (value.recursive !== undefined) {
     if (typeof value.recursive !== 'boolean') {
       diagnostics.push(diag('bad-recursive', `${path}.recursive`, 'recursive must be a boolean'));
@@ -396,6 +427,17 @@ function parseRecordSet(
     out.schema = normalizeAbsolute(value.schema);
   }
 
+  if (record === undefined && mediaTypes === undefined && value.schema === undefined) {
+    diagnostics.push(
+      diag(
+        'missing-record',
+        path,
+        'a record set must declare record, mediaType, or schema — the grammar that makes a file a record',
+      ),
+    );
+    return null;
+  }
+
   if (record !== undefined) out.record = record as RecordGrammar;
   if (mediaTypes !== undefined) out.mediaType = mediaTypes.length === 1 ? mediaTypes[0] : mediaTypes;
 
@@ -434,17 +476,28 @@ function parseRecordSet(
       return null;
     }
     const wellKnown: WellKnownFields = Object.create(null);
+    const isOpaque = record === 'opaque';
     for (const name of Object.keys(value.wellKnown)) {
       if (isReserved(name)) {
         diagnostics.push(diag('reserved-key', `${path}.wellKnown`, `wellKnown name ${JSON.stringify(name)} is reserved`));
         return null;
       }
-      if (!safeKey(name)) {
-        diagnostics.push(diag('bad-well-known', `${path}.wellKnown`, `wellKnown name is not a safe key`));
+      if (!WELL_KNOWN_FIELDS.has(name)) {
+        diagnostics.push(
+          diag('bad-well-known', `${path}.wellKnown`, `wellKnown name ${JSON.stringify(name)} is not in the closed vocabulary`),
+        );
         return null;
       }
-      const field = parseWellKnownField(value.wellKnown[name], `${path}.wellKnown.${name}`, diagnostics);
+      const field = parseWellKnownField(name, value.wellKnown[name], `${path}.wellKnown.${name}`, diagnostics);
       if (field === null) return null;
+      // §4a.1 — on an opaque record set the only well-known sources are `filename`
+      // and file metadata (`mtime`/`size`) — there is no record to read.
+      if (isOpaque && !OPAQUE_WELL_KNOWN_SOURCES.has(field.from)) {
+        diagnostics.push(
+          diag('bad-well-known', `${path}.wellKnown.${name}`, 'on an opaque record set a wellKnown field may only name filename/mtime/size'),
+        );
+        return null;
+      }
       wellKnown[name] = field;
     }
     out.wellKnown = wellKnown;
@@ -631,18 +684,27 @@ export function parseBundleLayout(json: unknown): LayoutParseResult {
   }
 
   if (json.layoutFrom !== undefined) {
-    const layoutFrom = json.layoutFrom;
-    if (
-      !isObject(layoutFrom) ||
-      typeof layoutFrom.app !== 'string' ||
-      typeof layoutFrom.commit !== 'string' ||
-      layoutFrom.app.includes('@')
-    ) {
+    // §4a.1 — `layoutFrom` is the alternative to an own `recordSets`/`tree` block
+    // ("instead of"), so providing both is a contradiction; the own block wins and
+    // the adopted default is dropped.
+    if (json.recordSets !== undefined) {
       diagnostics.push(
-        diag('bad-layout-from', 'layoutFrom', 'layoutFrom must be { app (revision-less), commit }'),
+        diag('layout-from-conflict', 'layoutFrom', 'layoutFrom and recordSets are mutually exclusive (§4a.1 "instead of")'),
       );
     } else {
-      layout.layoutFrom = { app: layoutFrom.app, commit: layoutFrom.commit };
+      const layoutFrom = json.layoutFrom;
+      if (
+        !isObject(layoutFrom) ||
+        typeof layoutFrom.app !== 'string' ||
+        typeof layoutFrom.commit !== 'string' ||
+        layoutFrom.app.includes('@')
+      ) {
+        diagnostics.push(
+          diag('bad-layout-from', 'layoutFrom', 'layoutFrom must be { app (revision-less), commit }'),
+        );
+      } else {
+        layout.layoutFrom = { app: layoutFrom.app, commit: layoutFrom.commit };
+      }
     }
   }
 
@@ -650,9 +712,10 @@ export function parseBundleLayout(json: unknown): LayoutParseResult {
 }
 
 /** Is `path` inside the `view` subtree (itself, or a descendant)? A `..`-free,
- *  prefix-scoped test — `/roadmap-foo` is NOT inside `/roadmap`. */
+ *  prefix-scoped test — `/roadmap-foo` is NOT inside `/roadmap`. The root view
+ *  (`/`) keeps every path. */
 const inView = (path: string, view: string): boolean =>
-  path === view || (view !== '/' && path.startsWith(view + '/'));
+  view === '' || view === '/' || path === view || path.startsWith(view + '/');
 
 /**
  * Prune a parsed layout down to a consumer's `subtree` view (`§4a.3`, G-BE-19).
@@ -676,7 +739,9 @@ export function pruneLayoutToView(layout: BundleLayout, subtree: string): Bundle
     if (rs.unique) {
       const kept = rs.unique.filter((u) => recordSets[u] !== undefined);
       if (kept.length !== rs.unique.length) {
-        recordSets[name] = { ...rs, unique: kept.length ? kept : undefined };
+        const { unique: _dropped, ...rest } = rs;
+        void _dropped;
+        recordSets[name] = kept.length ? { ...rs, unique: kept } : rest;
       }
     }
   }

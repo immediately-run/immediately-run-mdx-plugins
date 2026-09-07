@@ -10,11 +10,13 @@
 // equals each case's expectation.
 //
 // CALLER CONTRACT: `layout` is the VALUE of the marker's `layout` key (the block,
-// not the whole `immediately.run.json`). `expect.diagnostics` is the EXACT set of
-// diagnostic codes a parse must produce; `accept` says whether `layout` came back
-// non-null. The reserved-key cases build their input with `JSON.parse` so the
-// `__proto__` name is a genuine own property (a TS object literal would set the
-// prototype instead — the annotation everyone who edits this file needs).
+// not the whole `immediately.run.json`). `accept` says whether `parseBundleLayout`
+// returned a non-null layout; `diagnostics` is the EXACT set of diagnostic codes.
+// The reserved-key cases build their input with `JSON.parse` so the `__proto__`
+// name is a genuine own property (a TS object literal would set the prototype
+// instead). Every §4a.5 `limit-*` bound is a case, built at load time from
+// LAYOUT_LIMITS so the fixture and the parser can never disagree on the number.
+import { LAYOUT_LIMITS } from './bundleLayout';
 import type { LayoutDiagnosticCode } from './bundleLayout';
 
 /** One layout block and the parse every consumer must agree on. */
@@ -29,9 +31,9 @@ export interface BundleLayoutCase {
   why: string;
 }
 
-// The real producer — `.layout` value of `docs/content/immediately.run.json` as it
-// will be committed by R3-545, copied verbatim from BUNDLE_EMBEDDING_SPEC §4a.1.
-// Every consumer asserts this parses with ZERO diagnostics.
+// The real producer — the `layout` value of `docs/content/immediately.run.json` as
+// it will be committed by R3-545, copied verbatim from BUNDLE_EMBEDDING_SPEC §4a.1
+// (ASCII only, byte-for-byte: the "owner's tooling" apostrophe is 0x27).
 const wikiLayout = {
   version: 1,
   recordSets: {
@@ -71,12 +73,67 @@ const wikiLayout = {
   },
   tree: {
     '/roadmap': { purpose: 'the live engineering roadmap, one file per work item' },
-    '/roadmap/archive': { purpose: 'done items, moved here by the owner\u2019s tooling' },
+    '/roadmap/archive': { purpose: "done items, moved here by the owner's tooling" },
     '/roadmap/board': { purpose: 'the kanban view of /roadmap', bundle: true },
     '/specs': { purpose: 'one spec per area' },
     '/context': { purpose: 'the resident context set and the routed documents' },
   },
 } as const;
+
+const limits = LAYOUT_LIMITS;
+
+// The per-record-set bounds, exceeded by one, built from LAYOUT_LIMITS so they stay
+// exact if the numbers move. Each must yield ONLY its `limit-*` diagnostic.
+const limitCases = (): BundleLayoutCase[] => {
+  const recordSets: Record<string, unknown> = {};
+  for (let i = 0; i < limits.recordSets + 1; i++) recordSets[`set${i}`] = { dir: `/d${i}`, select: '*', record: 'opaque' };
+  const tree: Record<string, unknown> = {};
+  for (let i = 0; i < limits.treeEntries + 1; i++) tree[`/t${i}`] = { purpose: 'x' };
+  const unique = Array.from({ length: limits.uniqueFanOut + 1 }, (_, i) => `s${i}`);
+  const wellKnown: Record<string, unknown> = {};
+  for (let i = 0; i < limits.wellKnownNames + 1; i++) wellKnown[`k${i}`] = 'frontmatter.title';
+
+  return [
+    {
+      name: 'limit: record sets',
+      layout: { version: 1, recordSets },
+      accept: false,
+      diagnostics: ['limit-record-sets'],
+      why: '§4a.5 — more record sets than the bound refuses the whole block',
+    },
+    {
+      name: 'limit: tree entries',
+      layout: { version: 1, recordSets: {}, tree },
+      accept: false,
+      diagnostics: ['limit-tree-entries'],
+      why: '§4a.5 — more tree entries than the bound refuses the whole block',
+    },
+    {
+      name: 'limit: select glob length',
+      layout: {
+        version: 1,
+        recordSets: { a: { dir: '/a', select: 'x'.repeat(limits.selectGlobLength + 1), record: 'opaque' } },
+      },
+      accept: false,
+      diagnostics: ['limit-select-glob'],
+      why: '§4a.5 — a select glob longer than the bound refuses the whole block',
+    },
+    {
+      name: 'limit: unique fan-out',
+      layout: { version: 1, recordSets: { a: { dir: '/a', select: '*', record: 'opaque', unique } } },
+      accept: false,
+      diagnostics: ['limit-unique'],
+      why: '§4a.5 — more unique references than the bound refuses the whole block',
+    },
+    {
+      name: 'limit: wellKnown names',
+      layout: { version: 1, recordSets: { a: { dir: '/a', select: '*.mdx', record: 'mdx-frontmatter', wellKnown } } },
+      accept: false,
+      diagnostics: ['limit-well-known'],
+      why: '§4a.5 — more wellKnown fields than the bound refuses the whole block',
+    },
+  ];
+};
 
 export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
   {
@@ -135,9 +192,23 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
     why: 'recordSets must be an object',
   },
   {
+    name: 'layoutFrom and recordSets are mutually exclusive',
+    layout: { version: 1, recordSets: { a: { dir: '/a', select: '*', record: 'opaque' } }, layoutFrom: { app: 'github:immediately-run/grove', commit: '0123abc' } },
+    accept: true,
+    diagnostics: ['layout-from-conflict'],
+    why: '§4a.1 — layoutFrom is "instead of" an own block; a recordSets wins and layoutFrom is dropped',
+  },
+  {
+    name: 'layoutFrom with a revision refused',
+    layout: { version: 1, layoutFrom: { app: 'github:immediately-run/grove@main', commit: '0123abc' } },
+    accept: true,
+    diagnostics: ['bad-layout-from'],
+    why: 'layoutFrom.app is a revision-less identity; the revision lives in commit (§4a.1)',
+  },
+  {
     name: 'reserved record-set name is dropped, the rest survive',
     layout: JSON.parse(
-      '{"version":1,"recordSets":{"__proto__":{"dir":"/x","record":"opaque"},"ok":{"dir":"/y","record":"opaque"}}}',
+      '{"version":1,"recordSets":{"__proto__":{"dir":"/x","select":"*","record":"opaque"},"ok":{"dir":"/y","select":"*","record":"opaque"}}}',
     ),
     accept: true,
     diagnostics: ['reserved-key'],
@@ -146,16 +217,16 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
   {
     name: 'reserved wellKnown name refuses',
     layout: JSON.parse(
-      '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","record":"mdx-frontmatter","wellKnown":{"__proto__":"frontmatter.title"}}}}',
+      '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","select":"R3-*.mdx","record":"mdx-frontmatter","wellKnown":{"__proto__":"frontmatter.title"}}}}',
     ),
     accept: true,
     diagnostics: ['reserved-key'],
-    why: 'a `__proto__` wellKnown key is refused (the rest of the layout survives)',
+    why: 'a `__proto__` wellKnown key is refused',
   },
   {
     name: 'reserved `from` segment refuses',
     layout: JSON.parse(
-      '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","record":"mdx-frontmatter","wellKnown":{"title":"frontmatter.__proto__"}}}}',
+      '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","select":"R3-*.mdx","record":"mdx-frontmatter","id":{"from":"frontmatter.__proto__"}}}}',
     ),
     accept: true,
     diagnostics: ['reserved-key'],
@@ -163,7 +234,10 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
   },
   {
     name: 'schema $fs: refused',
-    layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap', record: 'mdx-frontmatter', schema: '$fs:/x.json' } } },
+    layout: {
+      version: 1,
+      recordSets: { roadmap: { dir: '/roadmap', select: 'R3-*.mdx', record: 'mdx-frontmatter', schema: '$fs:/x.json' } },
+    },
     accept: true,
     diagnostics: ['bad-schema'],
     why: '§4a.1 — a schema MUST be bundle-intrinsic; `$fs:` is refused here',
@@ -187,7 +261,7 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
   },
   {
     name: 'bad directory refused (traversal)',
-    layout: { version: 1, recordSets: { roadmap: { dir: '/../escape', record: 'opaque' } } },
+    layout: { version: 1, recordSets: { roadmap: { dir: '/../escape', select: '*', record: 'opaque' } } },
     accept: true,
     diagnostics: ['bad-dir'],
     why: 'a `dir` with `..` is refused, not clamped — a layout is a description',
@@ -201,16 +275,117 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
   },
   {
     name: 'bad record grammar refused',
-    layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap', record: 'yaml' } } },
+    layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap', select: 'R3-*.mdx', record: 'yaml' } } },
     accept: true,
     diagnostics: ['bad-record'],
     why: 'record must be one of the closed set',
   },
   {
-    name: 'layoutFrom with a revision refused',
-    layout: { version: 1, layoutFrom: { app: 'github:immediately-run/grove@main', commit: '0123abc' } },
+    name: 'a wellKnown name outside the closed vocabulary is refused',
+    layout: JSON.parse(
+      '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","select":"R3-*.mdx","record":"mdx-frontmatter","wellKnown":{"banana":"frontmatter.title"}}}}',
+    ),
     accept: true,
-    diagnostics: ['bad-layout-from'],
-    why: 'layoutFrom.app is a revision-less identity; the revision lives in commit (§4a.1)',
+    diagnostics: ['bad-well-known'],
+    why: '§4a.1 — wellKnown is a closed vocabulary; an unknown name is refused',
   },
+  {
+    name: 'wellKnown structure on the wrong field is refused',
+    layout: JSON.parse(
+      '{"version":1,"recordSets":{"roadmap":{"dir":"/roadmap","select":"R3-*.mdx","record":"mdx-frontmatter","wellKnown":{"title":{"from":"frontmatter.title","values":["a"]}}}}}',
+    ),
+    accept: true,
+    diagnostics: ['bad-well-known'],
+    why: '`values`/`terminal` belong to status only, `meaning` to order only',
+  },
+  {
+    name: 'an opaque record set may only name filename/mtime/size in wellKnown',
+    layout: {
+      version: 1,
+      recordSets: {
+        figures: { dir: '/figures', select: '*.png', mediaType: 'image/png', wellKnown: { title: 'frontmatter.title' } },
+      },
+    },
+    accept: true,
+    diagnostics: ['bad-well-known'],
+    why: '§4a.1 — there is no record to read on an opaque set, so the source is filename/mtime/size',
+  },
+  {
+    name: 'missing select refused',
+    layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap', record: 'mdx-frontmatter' } } },
+    accept: true,
+    diagnostics: ['missing-select'],
+    why: '§4a.1 — a record set is a directory plus a select glob',
+  },
+  {
+    name: 'missing record grammar (record/mediaType/schema) refused',
+    layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap', select: 'R3-*.mdx' } } },
+    accept: true,
+    diagnostics: ['missing-record'],
+    why: '§4a.1 — a record set must say what a record is (record, mediaType, or schema)',
+  },
+  {
+    name: 'record set value not an object',
+    layout: { version: 1, recordSets: { a: 42 } },
+    accept: true,
+    diagnostics: ['bad-record-set'],
+    why: 'a record set entry must be an object',
+  },
+  {
+    name: 'bad recursive refused',
+    layout: { version: 1, recordSets: { a: { dir: '/a', select: '*.mdx', record: 'mdx-frontmatter', recursive: 'yes' } } },
+    accept: true,
+    diagnostics: ['bad-recursive'],
+    why: 'recursive must be a boolean',
+  },
+  {
+    name: 'bad id refused',
+    layout: { version: 1, recordSets: { a: { dir: '/a', select: '*.mdx', record: 'mdx-frontmatter', id: { from: 42 } } } },
+    accept: true,
+    diagnostics: ['bad-id'],
+    why: 'id.from must be a safe `from` path',
+  },
+  {
+    name: 'bad unique refused',
+    layout: { version: 1, recordSets: { a: { dir: '/a', select: '*.mdx', record: 'mdx-frontmatter', unique: 'roadmap-archive' } } },
+    accept: true,
+    diagnostics: ['bad-unique'],
+    why: 'unique must be an array of safe record-set names',
+  },
+  {
+    name: 'bad wellKnown (not an object) refused',
+    layout: { version: 1, recordSets: { a: { dir: '/a', select: '*.mdx', record: 'mdx-frontmatter', wellKnown: 'title' } } },
+    accept: true,
+    diagnostics: ['bad-well-known'],
+    why: 'wellKnown must be an object',
+  },
+  {
+    name: 'bad writable refused',
+    layout: { version: 1, recordSets: { a: { dir: '/a', select: '*.mdx', record: 'mdx-frontmatter', writable: 'status' } } },
+    accept: true,
+    diagnostics: ['bad-writable'],
+    why: 'writable must be an array of strings',
+  },
+  {
+    name: 'bad frozen refused',
+    layout: { version: 1, recordSets: { a: { dir: '/a', select: '*.mdx', record: 'mdx-frontmatter', frozen: 'yes' } } },
+    accept: true,
+    diagnostics: ['bad-frozen'],
+    why: 'frozen must be a boolean',
+  },
+  {
+    name: 'tree not an object',
+    layout: { version: 1, recordSets: {}, tree: 'roadmap' },
+    accept: true,
+    diagnostics: ['bad-tree'],
+    why: 'tree must be an object',
+  },
+  {
+    name: 'bad tree entry refused',
+    layout: { version: 1, recordSets: {}, tree: { '/roadmap': 'purpose' } },
+    accept: true,
+    diagnostics: ['bad-tree-entry'],
+    why: 'each tree entry must be an object',
+  },
+  ...limitCases(),
 ];
