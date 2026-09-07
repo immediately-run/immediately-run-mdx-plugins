@@ -173,7 +173,9 @@ export type LayoutDiagnosticCode =
 
 export interface LayoutDiagnostic {
   code: LayoutDiagnosticCode;
-  /** The JSON path of the offending value (empty for a whole-block failure). */
+  /** The JSON path of the offending value. Empty only when the failure names no
+   *  single value (e.g. `layout-not-object`); whole-block refusals that DO name a
+   *  value (a bad `version`, a non-object `recordSets`) carry its path. */
   path: string;
   message: string;
 }
@@ -200,15 +202,19 @@ const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const safeKey = (name: unknown): name is string =>
   typeof name === 'string' && name.length > 0 && !name.includes('\0') && !RESERVED_KEYS.has(name);
 
-/** A bundle-absolute, already-normalized path: starts with `/`, no `\`/NUL, and no
- *  `.`/`..`/empty segment (the parser REFUSES traversal rather than clamping it — a
- *  layout is a description, and a `..` in one is an author error, not a navigation). */
-const cleanBundlePath = (p: unknown): p is string =>
-  typeof p === 'string' &&
-  p.startsWith('/') &&
-  !p.includes('\\') &&
-  !p.includes('\0') &&
-  p.split('/').slice(1).every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+/** A bundle-absolute path, normalized on the way out: starts with `/`, no `\`/NUL,
+ *  no `.`/`..`/empty segment (the parser REFUSES traversal rather than clamping it —
+ *  a layout is a description, and a `..` in one is an author error, not a
+ *  navigation). Tolerates ONE trailing slash — `at: '/items/'` is the spec §3
+ *  spelling and the host's `normalizeAt` normalizer accepts it; `normalizeAbsolute`
+ *  drops it before storage. */
+const cleanBundlePath = (p: unknown): p is string => {
+  if (typeof p !== 'string' || !p.startsWith('/')) return false;
+  if (p.includes('\\') || p.includes('\0')) return false;
+  let inner = p.slice(1);
+  if (inner.endsWith('/')) inner = inner.slice(0, -1);
+  return inner.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+};
 
 /** A `select` basename glob: no separators, no `..`, no NUL, non-empty. Its LENGTH
  *  bound is the `limit-select-glob` fatal, checked in the pre-pass, not here — one
@@ -309,7 +315,7 @@ function parseWellKnownField(
       diagnostics.push(diag('bad-well-known', `${path}.values`, 'status values must be an array of strings'));
       return null;
     }
-    (out as StatusField).values = values as string[];
+    (out as StatusField).values = (values as string[]).slice();
   }
   if ('terminal' in value) {
     if (name !== 'status') {
@@ -427,19 +433,19 @@ function parseRecordSet(
     out.schema = normalizeAbsolute(value.schema);
   }
 
-  if (record === undefined && mediaTypes === undefined && value.schema === undefined) {
+  if (record === undefined && mediaTypes === undefined) {
     diagnostics.push(
       diag(
         'missing-record',
         path,
-        'a record set must declare record, mediaType, or schema — the grammar that makes a file a record',
+        'a record set must declare record or mediaType — the grammar that makes a file a record',
       ),
     );
     return null;
   }
 
   if (record !== undefined) out.record = record as RecordGrammar;
-  if (mediaTypes !== undefined) out.mediaType = mediaTypes.length === 1 ? mediaTypes[0] : mediaTypes;
+  if (mediaTypes !== undefined) out.mediaType = mediaTypes.length === 1 ? mediaTypes[0] : mediaTypes.slice();
 
   if (value.id !== undefined) {
     const id = value.id;
@@ -685,9 +691,9 @@ export function parseBundleLayout(json: unknown): LayoutParseResult {
 
   if (json.layoutFrom !== undefined) {
     // §4a.1 — `layoutFrom` is the alternative to an own `recordSets`/`tree` block
-    // ("instead of"), so providing both is a contradiction; the own block wins and
-    // the adopted default is dropped.
-    if (json.recordSets !== undefined) {
+    // ("instead of"), so providing it beside either is a contradiction; the own
+    // block wins and the adopted default is dropped.
+    if (json.recordSets !== undefined || json.tree !== undefined) {
       diagnostics.push(
         diag('layout-from-conflict', 'layoutFrom', 'layoutFrom and recordSets are mutually exclusive (§4a.1 "instead of")'),
       );
@@ -715,29 +721,34 @@ export function parseBundleLayout(json: unknown): LayoutParseResult {
  *  prefix-scoped test — `/roadmap-foo` is NOT inside `/roadmap`. The root view
  *  (`/`) keeps every path. */
 const inView = (path: string, view: string): boolean =>
-  view === '' || view === '/' || path === view || path.startsWith(view + '/');
+  view === '/' || path === view || path.startsWith(view + '/');
 
 /**
  * Prune a parsed layout down to a consumer's `subtree` view (`§4a.3`, G-BE-19).
  * Drops every record set whose `dir` lies outside `subtree`, every `tree` entry
- * outside it, every `unique` reference to a dropped set, and `layoutFrom` (it
- * names the WHOLE bundle's default — a pruned view is not that). Returns a NEW
- * layout; the input is not mutated. Nothing the consuming app could actually read
- * is lost — the prune keeps the chroot's `ENOENT` answers from leaking as a
- * structured existence map of the owner's root (`threat_model` P7).
+ * outside it, and every `unique` reference to a set that was pruned OUT (references
+ * to names the owner never declared are the CHECKER's finding, not the prune's —
+ * the prune rewrites the owner's declaration no further than §4a.3 prescribes).
+ * `layoutFrom` names the WHOLE bundle's default, so it is carried only at the root
+ * view and dropped from any proper subtree. Returns a NEW layout; the input is not
+ * mutated. Nothing the consuming app could actually read is lost — the prune keeps
+ * the chroot's `ENOENT` answers from leaking as a structured existence map of the
+ * owner's root (`threat_model` P7).
  */
 export function pruneLayoutToView(layout: BundleLayout, subtree: string): BundleLayout {
   const view = normalizeAbsolute(subtree);
 
   const recordSets: Record<string, RecordSet> = Object.create(null);
+  const prunedOut = new Set<string>();
   for (const [name, rs] of Object.entries(layout.recordSets)) {
     if (inView(rs.dir, view)) recordSets[name] = rs;
+    else prunedOut.add(name);
   }
 
   for (const name of Object.keys(recordSets)) {
     const rs = recordSets[name];
     if (rs.unique) {
-      const kept = rs.unique.filter((u) => recordSets[u] !== undefined);
+      const kept = rs.unique.filter((u) => !prunedOut.has(u));
       if (kept.length !== rs.unique.length) {
         const { unique: _dropped, ...rest } = rs;
         void _dropped;
@@ -755,6 +766,8 @@ export function pruneLayoutToView(layout: BundleLayout, subtree: string): Bundle
     }
     pruned.tree = tree;
   }
+
+  if (layout.layoutFrom && view === '/') pruned.layoutFrom = layout.layoutFrom;
 
   return pruned;
 }

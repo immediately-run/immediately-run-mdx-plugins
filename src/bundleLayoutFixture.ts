@@ -233,6 +233,50 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
     why: 'a `from` path whose segment is `__proto__` is refused',
   },
   {
+    name: 'reserved record-set name `constructor` refuses',
+    layout: JSON.parse(
+      '{"version":1,"recordSets":{"constructor":{"dir":"/x","select":"*","record":"opaque","mediaType":"image/png"},"ok":{"dir":"/y","select":"*","record":"opaque","mediaType":"image/png"}}}',
+    ),
+    accept: true,
+    diagnostics: ['reserved-key'],
+    why: '§4a.5 — `constructor` in the record-set namespace is refused (the whole RESERVED_KEYS class, not only __proto__)',
+  },
+  {
+    name: 'reserved record-set name `prototype` refuses',
+    layout: JSON.parse(
+      '{"version":1,"recordSets":{"prototype":{"dir":"/x","select":"*","record":"opaque","mediaType":"image/png"}}}',
+    ),
+    accept: true,
+    diagnostics: ['reserved-key'],
+    why: '§4a.5 — `prototype` in the record-set namespace is refused',
+  },
+  {
+    name: 'the full closed wellKnown vocabulary accepts',
+    layout: {
+      version: 1,
+      recordSets: {
+        docs: {
+          dir: '/docs',
+          select: '*.mdx',
+          record: 'mdx-frontmatter',
+          schema: '/docs/doc.schema.json',
+          wellKnown: {
+            title: 'frontmatter.title',
+            body: 'content',
+            status: { from: 'frontmatter.status', values: ['draft', 'published'] },
+            order: { from: 'frontmatter.order', meaning: 'display' },
+            labels: 'frontmatter.tags',
+            date: 'frontmatter.date',
+            summary: 'frontmatter.summary',
+          },
+        },
+      },
+    },
+    accept: true,
+    diagnostics: [],
+    why: '§4a.1 — every one of the seven well-known names parses (labels/date/summary are input here, not just favourites)',
+  },
+  {
     name: 'schema $fs: refused',
     layout: {
       version: 1,
