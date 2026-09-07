@@ -695,7 +695,7 @@ export function parseBundleLayout(json: unknown): LayoutParseResult {
     // block wins and the adopted default is dropped.
     if (json.recordSets !== undefined || json.tree !== undefined) {
       diagnostics.push(
-        diag('layout-from-conflict', 'layoutFrom', 'layoutFrom and recordSets are mutually exclusive (§4a.1 "instead of")'),
+        diag('layout-from-conflict', 'layoutFrom', 'layoutFrom is instead-of an own recordSets/tree block (§4a.1), not beside one'),
       );
     } else {
       const layoutFrom = json.layoutFrom;

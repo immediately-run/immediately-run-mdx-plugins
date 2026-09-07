@@ -199,6 +199,20 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
     why: '§4a.1 — layoutFrom is "instead of" an own block; a recordSets wins and layoutFrom is dropped',
   },
   {
+    name: 'layoutFrom and tree are mutually exclusive',
+    layout: { version: 1, tree: { '/roadmap': { purpose: 'x' } }, layoutFrom: { app: 'github:immediately-run/grove', commit: '0123abc' } },
+    accept: true,
+    diagnostics: ['layout-from-conflict'],
+    why: '§4a.1 — layoutFrom is "instead of" an own recordSets/tree block; a tree alone triggers the same conflict',
+  },
+  {
+    name: 'a trailing slash on a dir is a clamp, not a refusal',
+    layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap/', select: 'R3-*.mdx', record: 'opaque', mediaType: 'text/md' } }, tree: { '/roadmap/': { purpose: 'x' } } },
+    accept: true,
+    diagnostics: [],
+    why: 'dir/tree tolerate one trailing slash (the spec §3 `at: \'/items/\'` spelling) and normalize it away — the one accept-and-normalize clamp in the grammar',
+  },
+  {
     name: 'layoutFrom with a revision refused',
     layout: { version: 1, layoutFrom: { app: 'github:immediately-run/grove@main', commit: '0123abc' } },
     accept: true,
@@ -362,11 +376,18 @@ export const BUNDLE_LAYOUT_FIXTURE: readonly BundleLayoutCase[] = [
     why: '§4a.1 — a record set is a directory plus a select glob',
   },
   {
-    name: 'missing record grammar (record/mediaType/schema) refused',
+    name: 'missing record grammar (record/mediaType) refused',
     layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap', select: 'R3-*.mdx' } } },
     accept: true,
     diagnostics: ['missing-record'],
-    why: '§4a.1 — a record set must say what a record is (record, mediaType, or schema)',
+    why: '§4a.1 — a record set must declare record or mediaType; neither means the block does not say what a record is',
+  },
+  {
+    name: 'a schema alone names no grammar',
+    layout: { version: 1, recordSets: { roadmap: { dir: '/roadmap', select: 'R3-*.mdx', schema: '/roadmap/item.schema.json' } } },
+    accept: true,
+    diagnostics: ['missing-record'],
+    why: 'a schema with no record grammar is refused — the consumer could not choose mdx-frontmatter vs json-file',
   },
   {
     name: 'record set value not an object',
