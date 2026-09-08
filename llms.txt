@@ -1,6 +1,6 @@
 # @immediately-run/mdx-plugins
 
-> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import). (v0.7.0)
+> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import). (v0.7.1)
 
 The grammar + resolution canon shared by every immediately.run render path: the transpiler's compiled MDX, the safe renderer, Grove's runtime, and the docs corpus checker all import THESE implementations — a wiki-link, heading anchor, or link resolution means the same byte everywhere.
 

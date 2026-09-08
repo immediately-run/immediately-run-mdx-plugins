@@ -10,6 +10,9 @@
 // WHAT IT IS NOT. Not a YAML implementation. It reads `key: scalar`, inline flow
 // lists `key: [a, b]`, block lists (`key:` then `  - item`), and ONE level of nesting
 // (`owns:` then `  concepts: [...]`) — the grammar the authoring contract documents.
+// Quoted scalars ARE decoded rather than merely unwrapped, because a quoted scalar's
+// escapes are part of that grammar and not an exotic corner of YAML: the corpus's own
+// writer emits them (see `DOUBLE_QUOTED_ESCAPES`).
 // Anything else is ignored rather than rejected: a corpus is read by a viewer at
 // runtime, and a file that fails to parse must degrade to "an entry with no
 // metadata", never to a blank page.
@@ -42,9 +45,89 @@ export interface FrontmatterParseResult {
   hadFrontmatter: boolean;
 }
 
+/**
+ * YAML 1.2 §5.7 escape sequences, as a closed table.
+ *
+ * A quoted scalar is not its own bytes: the corpus writer emits a backslash before a
+ * quote inside a double-quoted title (docs `scripts/lib/wiki.mjs` `emitScalar`), and a
+ * reader that only removed the surrounding quotes handed that backslash on to whatever
+ * rendered the string. Readers saw it wherever a scalar is printed as plain text — a
+ * roadmap card title read `R3-170 — \"Open as wiki / view\" …` — while the entry header
+ * for the same item looked right, because the inline-prose parser eats a backslash
+ * before ASCII punctuation as a CommonMark escape. Decoding here is what makes those two
+ * surfaces agree, and what makes this reader agree with the real YAML parser the
+ * compiled path uses (`transpiler/src/mdx/frontmatter.ts`).
+ *
+ * The `x` / `u` / `U` forms are handled separately, being the only variable-length ones.
+ */
+const DOUBLE_QUOTED_ESCAPES: Record<string, string> = {
+  '0': '\0',
+  a: '\x07',
+  b: '\b',
+  t: '\t',
+  '\t': '\t',
+  n: '\n',
+  v: '\v',
+  f: '\f',
+  r: '\r',
+  e: '\x1b',
+  ' ': ' ',
+  '"': '"',
+  '/': '/',
+  '\\': '\\',
+  N: '\u0085',
+  _: '\u00a0',
+  L: '\u2028',
+  P: '\u2029',
+};
+
+/** How many hex digits each variable-length escape takes after its marker. */
+const HEX_ESCAPE_DIGITS: Record<string, number> = { x: 2, u: 4, U: 8 };
+
+/** The code point a `\xXX` / `\uXXXX` / `\UXXXXXXXX` escape names, or null if it is not one. */
+function hexEscape(s: string, at: number): { value: string; length: number } | null {
+  const digits = HEX_ESCAPE_DIGITS[s[at]];
+  if (digits === undefined) return null;
+  const raw = s.slice(at + 1, at + 1 + digits);
+  if (raw.length !== digits || !/^[0-9a-fA-F]+$/.test(raw)) return null;
+  const cp = parseInt(raw, 16);
+  if (cp > 0x10ffff) return null;
+  return { value: String.fromCodePoint(cp), length: 1 + digits };
+}
+
+/** Decode a double-quoted scalar's body (the text between the quotes). */
+function unescapeDoubleQuoted(s: string): string {
+  if (!s.includes('\\')) return s;
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== '\\' || i + 1 >= s.length) {
+      out += s[i];
+      continue;
+    }
+    const next = s[i + 1];
+    const hex = hexEscape(s, i + 1);
+    if (hex) {
+      out += hex.value;
+      i += hex.length;
+    } else if (Object.prototype.hasOwnProperty.call(DOUBLE_QUOTED_ESCAPES, next)) {
+      out += DOUBLE_QUOTED_ESCAPES[next];
+      i += 1;
+    } else {
+      // Not an escape YAML defines. A real parser rejects the document; a viewer must
+      // not, so both characters stand as written rather than one being eaten silently.
+      out += s[i];
+    }
+  }
+  return out;
+}
+
 function stripQuotes(s: string): string {
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    return s.slice(1, -1);
+  // Length 2 is the shortest quoted scalar (`""`); without the check a lone `"` would
+  // slice to the empty string and a one-character value would vanish.
+  if (s.length >= 2) {
+    if (s.startsWith('"') && s.endsWith('"')) return unescapeDoubleQuoted(s.slice(1, -1));
+    // A single-quoted scalar has exactly one escape: a doubled quote is one quote.
+    if (s.startsWith("'") && s.endsWith("'")) return s.slice(1, -1).replace(/''/g, "'");
   }
   return s;
 }
