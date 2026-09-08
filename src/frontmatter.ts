@@ -84,7 +84,20 @@ const DOUBLE_QUOTED_ESCAPES: Record<string, string> = {
 /** How many hex digits each variable-length escape takes after its marker. */
 const HEX_ESCAPE_DIGITS: Record<string, number> = { x: 2, u: 4, U: 8 };
 
-/** The code point a `\xXX` / `\uXXXX` / `\UXXXXXXXX` escape names, or null if it is not one. */
+/**
+ * The code point a `\xXX` / `\uXXXX` / `\UXXXXXXXX` escape names, or null if it is not one.
+ *
+ * **A lone surrogate (`\uD800`–`\uDFFF`) is decoded, not refused.** It looks like input to
+ * validate, and it is not: `yaml` — the parser the compiled path runs — decodes it to the
+ * isolated code unit without complaint, so refusing it here would make one title read
+ * `a\uD800b` under dispatch and `a<surrogate>b` under the bundler. That divergence is the
+ * one thing this module exists to prevent, and any downstream trouble an isolated
+ * surrogate causes is a property of the corpus, identical on both paths.
+ * `test/frontmatterParity.test.mjs` holds the whole agreement, this case included.
+ *
+ * The range check is a guard against `String.fromCodePoint` throwing, not a policy:
+ * `\U00110000` names nothing, so it falls through to "not an escape" and its text stands.
+ */
 function hexEscape(s: string, at: number): { value: string; length: number } | null {
   const digits = HEX_ESCAPE_DIGITS[s[at]];
   if (digits === undefined) return null;
