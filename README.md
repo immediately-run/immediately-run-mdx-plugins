@@ -46,13 +46,14 @@ It never throws. It returns `{ data, body, content, hadFrontmatter, error? }`. T
 of block give `data: {}` and an `error`:
 - `yaml`: not valid YAML.
 - `not-a-map`: a list, a scalar or a tagged value where the map should be.
-- `not-json`: the block holds a value JSON cannot carry. That is a `Date`, a byte array or
-  a `Set` from an explicit tag such as `!!timestamp`, `Infinity` or `NaN` from `.inf` or
-  `.nan`, or an alias cycle such as `a: &x [*x]`.
+- `not-json`: the block holds a value JSON cannot carry. That is a `Date`, a byte array, a
+  `Set` or a `Map` from an explicit tag such as `!!timestamp` or `!!omap`, `Infinity` or
+  `NaN` from `.inf` or `.nan`, or an alias cycle such as `a: &x [*x]`.
 
 The `error` has its kind and a one-line message, plus `yaml`'s error code when `yaml`
 raised one. It also has the line and column in the document wherever the node can be
-named; a value under a non-string key is the one case without them. A checker should fail
+named. Two cases may have none: a value under a non-string key, and a value first reached
+through an alias. A checker should fail
 on `error`; a viewer shows the entry without metadata.
 
 `FRONTMATTER_PARITY_FIXTURE` is the proof a consumer runs: one case per input shape, two

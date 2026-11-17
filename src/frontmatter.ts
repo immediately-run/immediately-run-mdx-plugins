@@ -38,8 +38,9 @@ export interface FrontmatterError {
    * `yaml`: the block is not valid YAML. `not-a-map`: it parses, but to a list, a scalar or
    * a tagged value rather than a map. `not-json`: it parses to a map holding a value outside
    * {@link FrontmatterValue}, which a metadata envelope of JSON values cannot carry — a
-   * `Date`, byte array or `Set` from an explicit tag (`!!timestamp`, `!!binary`, `!!set`),
-   * `Infinity` or `NaN` from `.inf` / `.nan`, or an alias cycle (`a: &x [*x]`).
+   * `Date`, byte array, `Set` or `Map` from an explicit tag (`!!timestamp`, `!!binary`,
+   * `!!set`, `!!omap`), `Infinity` or `NaN` from `.inf` / `.nan`, or an alias cycle
+   * (`a: &x [*x]`).
    */
   kind: 'yaml' | 'not-a-map' | 'not-json';
   /** The parser's message, first line only, without its own position suffix. */
@@ -232,7 +233,9 @@ export function parseFrontmatter(input: string): FrontmatterParseResult {
       kind: 'not-json',
       message: `\`${formatPath(nonJson.path)}\` ${nonJson.why}; frontmatter holds JSON values only`,
     };
-    // The node at that key path, when the document can name it (a non-string key may not).
+    // The node at that key path, when the document can name it. It may not: a non-string
+    // key does not match its stringified form, and a path through an alias stops at the
+    // Alias node, which `getIn` cannot descend.
     const node = parseDocument(yamlText).getIn(nonJson.path, true) as { range?: [number, number, number] } | undefined;
     if (node?.range) Object.assign(result.error, positionOf(yamlText, node.range[0]));
     return result;
