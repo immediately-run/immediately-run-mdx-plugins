@@ -9,12 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import {
-  INLINE_PROSE_FIXTURE,
-  parseFrontmatter,
-  parseInlineProse,
-  plainProse,
-} from '../dist/index.js';
+import { INLINE_PROSE_FIXTURE, parseInlineProse, plainProse } from '../dist/index.js';
+import { parseFrontmatter } from '../dist/frontmatter.js';
 
 test('the fixture describes THIS package (the canon)', () => {
   for (const c of INLINE_PROSE_FIXTURE) {

@@ -1,7 +1,7 @@
 {
   "name": "@immediately-run/mdx-plugins",
   "version": "0.8.0",
-  "description": "immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15), the slug grammar (textSlug/sectionId), and the one frontmatter parser every corpus reader shares (parseFrontmatter, YAML 1.2 via `yaml`). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. The plugins are pure mdast transforms; the only runtime dependency is `yaml`, for parseFrontmatter.",
+  "description": "immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15), the slug grammar (textSlug/sectionId), and the one frontmatter parser every corpus reader shares (parseFrontmatter, YAML 1.2 via `yaml`, on the `/frontmatter` subpath). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. The plugins are pure mdast transforms; the only runtime dependency is `yaml`, imported only by the `/frontmatter` subpath, so the root stays dependency-free.",
   "license": "MIT",
   "repository": "github:immediately-run/immediately-run-mdx-plugins",
   "type": "module",
@@ -13,6 +13,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./frontmatter": {
+      "types": "./dist/frontmatter.d.ts",
+      "import": "./dist/frontmatter.js",
+      "require": "./dist/frontmatter.cjs"
     },
     "./package.json": "./package.json"
   },

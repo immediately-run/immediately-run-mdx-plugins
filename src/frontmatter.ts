@@ -18,7 +18,7 @@
 // at runtime, so a block that does not parse degrades to "an entry with no metadata", and
 // the reason is returned in `error` for a checker to report. `data` is then `{}`: a
 // half-read block is exactly the divergence this module exists to remove.
-import { parse } from 'yaml';
+import { parse, parseDocument } from 'yaml';
 
 /** A parsed frontmatter value: whatever YAML 1.2's core schema produces. */
 export type FrontmatterValue =
@@ -34,10 +34,22 @@ export type ParsedFrontmatter = Record<string, FrontmatterValue>;
 
 /** Why a block that is present yielded no data. */
 export interface FrontmatterError {
-  /** `yaml`: the block is not valid YAML. `not-a-map`: it parses, but to a list or a scalar. */
-  kind: 'yaml' | 'not-a-map';
+  /**
+   * `yaml`: the block is not valid YAML. `not-a-map`: it parses, but to a list or a scalar.
+   * `not-json`: it parses to a map holding a value outside {@link FrontmatterValue} — an
+   * explicit tag such as `!!timestamp`, `!!binary` or `!!set` makes `yaml` build a `Date`,
+   * a byte array or a `Set`, which a metadata envelope of JSON values cannot carry.
+   */
+  kind: 'yaml' | 'not-a-map' | 'not-json';
   /** The parser's message, first line only, without its own position suffix. */
   message: string;
+  /**
+   * `yaml`'s own error code when it raised one (`BLOCK_AS_IMPLICIT_KEY`, `DUPLICATE_KEY`,
+   * `RESOURCE_EXHAUSTION`, …). Its presence is how a test tells a bounded parse error from
+   * a raw runtime error: deeply nested input once overflowed the stack (GHSA-48c2-rrv3-qjmp,
+   * fixed in yaml 2.8.3) and now answers `RESOURCE_EXHAUSTION`.
+   */
+  code?: string;
   /** 1-based line in the WHOLE document (the opening fence is line 1), when known. */
   line?: number;
   /** 1-based column on that line, when known. */
@@ -77,12 +89,63 @@ const FRONTMATTER_RE = /^---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/
 // is reported separately (and relative to the document, not the block), so both go.
 const POSITION_SUFFIX = / at line \d+, column \d+:?$/;
 
-function toError(kind: FrontmatterError['kind'], e: unknown): FrontmatterError {
+// The block starts on the line after the opening fence, so its line 1 is the file's line 2.
+const BLOCK_FIRST_LINE = 2;
+
+function toError(e: unknown): FrontmatterError {
   const raw = e instanceof Error ? e.message : String(e);
-  const message = raw.split('\n')[0].replace(POSITION_SUFFIX, '').trim();
+  const err: FrontmatterError = {
+    kind: 'yaml',
+    message: raw.split('\n')[0].replace(POSITION_SUFFIX, '').trim(),
+  };
+  const code = (e as { code?: unknown } | null)?.code;
+  if (typeof code === 'string') err.code = code;
   const pos = (e as { linePos?: Array<{ line: number; col: number }> } | null)?.linePos?.[0];
-  // The block starts on the line after the opening fence, so its line 1 is the file's line 2.
-  return pos ? { kind, message, line: pos.line + 1, column: pos.col } : { kind, message };
+  if (pos) {
+    err.line = pos.line + BLOCK_FIRST_LINE - 1;
+    err.column = pos.col;
+  }
+  return err;
+}
+
+/** The document line and column of a character offset within the block. */
+function positionOf(yamlText: string, offset: number): { line: number; column: number } {
+  const before = yamlText.slice(0, offset);
+  const lastBreak = before.lastIndexOf('\n');
+  return {
+    line: BLOCK_FIRST_LINE + (before.match(/\n/g)?.length ?? 0),
+    column: offset - lastBreak, // 1-based: lastBreak is -1 on the block's first line
+  };
+}
+
+/**
+ * The key path of the first value that is not a {@link FrontmatterValue}, or null.
+ *
+ * `yaml` with no options returns plain objects, arrays and primitives for untagged YAML —
+ * and a `Date`, a byte array, a `Set` or a `Map` when an explicit tag asks for one. A plain
+ * object is one whose prototype is `Object.prototype` (or null).
+ */
+function firstNonJson(value: unknown, path: string): { path: string; what: string } | null {
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return null;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const hit = firstNonJson(value[i], `${path}[${i}]`);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof value === 'object') {
+    const proto = Object.getPrototypeOf(value);
+    if (proto === Object.prototype || proto === null) {
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        const hit = firstNonJson(v, path ? `${path}.${k}` : k);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    return { path, what: (value as object).constructor?.name ?? 'object' };
+  }
+  return { path, what: typeof value };
 }
 
 /**
@@ -112,17 +175,27 @@ export function parseFrontmatter(input: string): FrontmatterParseResult {
   try {
     parsed = parse(yamlText);
   } catch (e) {
-    result.error = toError('yaml', e);
+    result.error = toError(e);
     return result;
   }
   // A block holding only comments parses to null: frontmatter with no keys, like `---\n---`.
   if (parsed === null || parsed === undefined) return result;
   if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+    // Point at the node itself: comments or blank lines may come before it. `parse` just
+    // succeeded on this text, so `parseDocument` (the same parser, no options) succeeds too.
+    const start = parseDocument(yamlText).contents?.range?.[0] ?? 0;
     result.error = {
       kind: 'not-a-map',
       message: `frontmatter must be a map of keys, not ${Array.isArray(parsed) ? 'a list' : `a ${typeof parsed}`}`,
-      line: 2,
-      column: 1,
+      ...positionOf(yamlText, start),
+    };
+    return result;
+  }
+  const nonJson = firstNonJson(parsed, '');
+  if (nonJson) {
+    result.error = {
+      kind: 'not-json',
+      message: `\`${nonJson.path}\` is a ${nonJson.what}, which frontmatter cannot hold — remove its explicit YAML tag`,
     };
     return result;
   }

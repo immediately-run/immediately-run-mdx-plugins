@@ -1,6 +1,6 @@
 # @immediately-run/mdx-plugins
 
-> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15), the slug grammar (textSlug/sectionId), and the one frontmatter parser every corpus reader shares (parseFrontmatter, YAML 1.2 via `yaml`). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. The plugins are pure mdast transforms; the only runtime dependency is `yaml`, for parseFrontmatter. (v0.8.0)
+> immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15), the slug grammar (textSlug/sectionId), and the one frontmatter parser every corpus reader shares (parseFrontmatter, YAML 1.2 via `yaml`, on the `/frontmatter` subpath). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. The plugins are pure mdast transforms; the only runtime dependency is `yaml`, imported only by the `/frontmatter` subpath, so the root stays dependency-free. (v0.8.0)
 
 The grammar + resolution canon shared by every immediately.run render path: the transpiler's compiled MDX, the safe renderer, Grove's runtime, and the docs corpus checker all import THESE implementations — a wiki-link, heading anchor, or link resolution means the same byte everywhere.
 
@@ -8,9 +8,6 @@ The grammar + resolution canon shared by every immediately.run render path: the 
 
 - `BundleLayout` (interface)
 - `BundleLayoutCase` (interface) — One layout block and the parse every consumer must agree on.
-- `FrontmatterCase` (interface) — One input and what `parseFrontmatter` must make of it.
-- `FrontmatterError` (interface) — Why a block that is present yielded no data.
-- `FrontmatterParseResult` (interface)
 - `HeadingAnchorOptions` (interface)
 - `InlineProseCase` (interface) — One prose string and the derivations every consumer must agree on.
 - `LayoutDiagnostic` (interface)
@@ -25,15 +22,12 @@ The grammar + resolution canon shared by every immediately.run render path: the 
 - `StatusField` (interface) — The `status` well-known field, which declares its lifecycle `values` and an optional `terminal` — the value that ends the lifecycle and, when the owner's convention is a file move, the record set it moves to.
 - `TreeEntry` (interface) — One `tree` entry — a human- and agent-readable directory description.
 - `WellKnownField` (interface) — One well-known record field (a `from` path, or a bare string as shorthand).
-- `FrontmatterValue` (type) — A parsed frontmatter value: whatever YAML 1.2's core schema produces.
 - `InlineProseNode` (type) — One inline node of a parsed frontmatter prose string.
 - `LayoutDiagnosticCode` (type) — A closed, typed diagnostic code — the host maps these to its `MarkerRejection` diagnostics, the checker prints them.
-- `ParsedFrontmatter` (type) — One document's parsed frontmatter block.
 - `RecordGrammar` (type) — The closed record grammars of §4a.1/§4.1: `mdx-frontmatter` (one record per MDX file, fields from frontmatter), `json-file` (one record per JSON file), and `opaque` (a consumer may list but never parse — the media-type default).
 - `ResolvedLinkTarget` (type)
 - `WellKnownFields` (type) — The closed well-known vocabulary (§4a.1): `title`, `body`, `status`, `order`, `labels`, `date`, `summary`.
 - `BUNDLE_LAYOUT_FIXTURE` (const)
-- `FRONTMATTER_PARITY_FIXTURE` (const)
 - `FS_PREFIX` (const)
 - `INLINE_PROSE_FIXTURE` (const)
 - `LAYOUT_GRAMMAR_VERSION` (const)
@@ -45,7 +39,6 @@ The grammar + resolution canon shared by every immediately.run render path: the 
 - `isContentEntryPath` (function) — Is this PATH a corpus entry?
 - `normalizeAbsolute` (function) — Collapse `.`/`..`/empty segments into a clean absolute path.
 - `parseBundleLayout` (function) — Parse a marker's `layout` block into its typed description — or `null` plus diagnostics when the block is malformed or unknown-`version`.
-- `parseFrontmatter` (function) — Split a `--- … ---` YAML frontmatter block off the top of a document and parse it.
 - `parseInlineProse` (function) — Parse a frontmatter prose string into inline nodes: `` `x` `` → code, `**x**` → strong, `*x*`/`_x_` → emphasis, everything else literal text.
 - `plainProse` (function) — The plain form: markers dropped, content kept — `` `x` `` → `x`, `**x**` / `*x*` → `x`, an unbalanced marker kept literally.
 - `pruneLayoutToView` (function) — Prune a parsed layout down to a consumer's `subtree` view (`§4a.3`, G-BE-19).
@@ -56,9 +49,19 @@ The grammar + resolution canon shared by every immediately.run render path: the 
 - `sectionId` (function) — The section id for a heading's text, or `null` when the heading is prose (not section-like).
 - `textSlug` (function) — GitHub-compatible text slug (MARKDOWN_SYNTAX_SPEC §15.1): lower-case, strip anything that is not a word char / space / hyphen, collapse whitespace to single hyphens.
 
+## Exports from `@immediately-run/mdx-plugins/frontmatter`
+
+- `FrontmatterCase` (interface) — One input and what `parseFrontmatter` must make of it.
+- `FrontmatterError` (interface) — Why a block that is present yielded no data.
+- `FrontmatterParseResult` (interface)
+- `FrontmatterValue` (type) — A parsed frontmatter value: whatever YAML 1.2's core schema produces.
+- `ParsedFrontmatter` (type) — One document's parsed frontmatter block.
+- `FRONTMATTER_PARITY_FIXTURE` (const)
+- `parseFrontmatter` (function) — Split a `--- … ---` YAML frontmatter block off the top of a document and parse it.
+
 ## The parity fixtures
 
-`SLUG_PARITY_FIXTURE` and `LINK_SPACE_FIXTURE` are published DATA, not tests-in-disguise: every consumer (the plugin here, Grove's runtime, the docs checker) asserts its own outcome against the same cases, so disagreement is a failing test in whichever repo drifted. If you derive a heading id or resolve a link, you are contractually comparing against these.
+`SLUG_PARITY_FIXTURE`, `LINK_SPACE_FIXTURE` and (from the `/frontmatter` subpath) `FRONTMATTER_PARITY_FIXTURE` are published DATA, not tests-in-disguise: every consumer (the plugin here, Grove's runtime, the docs checker) asserts its own outcome against the same cases, so disagreement is a failing test in whichever repo drifted. If you derive a heading id or resolve a link, you are contractually comparing against these.
 
 ---
 _Generated from the typed API by `scripts/gen-llms.mjs`; regenerate on export changes (verify checks freshness)._

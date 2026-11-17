@@ -8,7 +8,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseFrontmatter, isContentEntryFile, isContentEntryPath } from '../dist/index.js';
+import { isContentEntryFile, isContentEntryPath } from '../dist/index.js';
+import { parseFrontmatter } from '../dist/frontmatter.js';
 
 test('parses scalars, flow lists, block lists and one level of nesting', () => {
   const src = [

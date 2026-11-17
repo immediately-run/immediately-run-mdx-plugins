@@ -150,6 +150,12 @@
     "block": "- a\n- b"
   },
   {
+    "name": "explicit-tags",
+    "why": "an explicit `!!timestamp` or `!!binary` tag makes yaml build a Date or a byte array, which no JSON envelope can carry: an error, not a value only one reader could hold",
+    "source": "---\npublished: !!timestamp 2026-01-01\nraw: !!binary aGVsbG8=\n---\nBody.\n",
+    "block": "published: !!timestamp 2026-01-01\nraw: !!binary aGVsbG8="
+  },
+  {
     "name": "real-grove-hero-unquoted",
     "why": "REAL BYTES: immediately-run/grove content/_layouts/hero.mdx at 33391ef — `description:` holds `nav: top` mid-line, which the host rejected while every check passed",
     "source": "---\nlayoutRole: root\nnav: top\ndescription: A landing root starter — copy to your content root as _layout.mdx for a full-bleed band over TOP navigation (nav: top; the one arrangement the default shell cannot give you) followed by a short grid. DocList attributes must stay literals — the interpreter drops expressions like limit={n} silently. The picture slot renders the link-graph lattice until cover: lands.\n---\n\n<GroveNav />\n",

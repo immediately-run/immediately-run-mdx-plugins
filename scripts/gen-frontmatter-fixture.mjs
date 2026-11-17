@@ -21,7 +21,20 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CASES = join(root, 'src/frontmatterFixture.cases.json');
 const EXPECTED = join(root, 'src/frontmatterFixture.expected.json');
 
-/** What the host's parser makes of one declared block. */
+/** Whether every value in a parsed block is JSON-shaped: primitives, arrays, plain objects. */
+function isJsonShaped(value) {
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return true;
+  if (Array.isArray(value)) return value.every(isJsonShaped);
+  if (typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return (proto === Object.prototype || proto === null) && Object.values(value).every(isJsonShaped);
+}
+
+/**
+ * What one declared block must parse to. The VALUE is `yaml.parse`'s; the three outcomes
+ * that yield no data (a parse error, a block that is not a map, a value outside the JSON
+ * set) are the contract `src/frontmatter.ts` documents, restated here as the expectation.
+ */
 function expectedFor(block) {
   if (block === null) return { data: {}, hadFrontmatter: false };
   let parsed;
@@ -34,6 +47,7 @@ function expectedFor(block) {
   if (typeof parsed !== 'object' || Array.isArray(parsed)) {
     return { data: {}, hadFrontmatter: true, errorKind: 'not-a-map' };
   }
+  if (!isJsonShaped(parsed)) return { data: {}, hadFrontmatter: true, errorKind: 'not-json' };
   return { data: parsed, hadFrontmatter: true };
 }
 

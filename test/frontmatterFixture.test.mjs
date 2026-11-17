@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FRONTMATTER_PARITY_FIXTURE } from '../dist/index.js';
+import { FRONTMATTER_PARITY_FIXTURE } from '../dist/frontmatter.js';
 
 // The shapes R3-1347 names, one case each. Adding a shape adds a name here and a case.
 const SHAPES = [
@@ -12,7 +12,7 @@ const SHAPES = [
   'quoted-escapes', 'flow-list', 'block-list', 'list-of-maps', 'nested-three-levels',
   'flow-map', 'multi-line-plain', 'block-scalars', 'comment-line', 'crlf', 'bom',
   'fence-trailing-spaces', 'empty-block', 'comments-only', 'unclosed', 'no-frontmatter',
-  'duplicate-key', 'bad-escape', 'list-document',
+  'duplicate-key', 'bad-escape', 'list-document', 'explicit-tags',
 ];
 const REAL = ['real-grove-hero-unquoted', 'real-okf-ga4-events'];
 
@@ -24,7 +24,7 @@ test('case names are unique, and every named shape has a case', () => {
 
 test('both outcomes are exercised: data, and each error kind', () => {
   const kinds = new Set(FRONTMATTER_PARITY_FIXTURE.map((c) => c.expected.errorKind ?? 'ok'));
-  for (const k of ['ok', 'yaml', 'not-a-map']) assert.ok(kinds.has(k), `no case ends ${k}`);
+  for (const k of ['ok', 'yaml', 'not-a-map', 'not-json']) assert.ok(kinds.has(k), `no case ends ${k}`);
 });
 
 test('a declared block is part of its source, and only frontmatter cases declare one', () => {

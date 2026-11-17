@@ -173,6 +173,11 @@
     "hadFrontmatter": true,
     "errorKind": "not-a-map"
   },
+  "explicit-tags": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-json"
+  },
   "real-grove-hero-unquoted": {
     "data": {},
     "hadFrontmatter": true,

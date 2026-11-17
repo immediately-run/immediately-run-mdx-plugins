@@ -34,18 +34,12 @@ export type { ResolvedLinkTarget, LinkSpace } from './linkSpaceCore';
 
 // R3-277a — the corpus-tooling core: the frontmatter parser and the entry-enumeration
 // rule, each of which had two implementations that agreed only because one was a
-// careful port of the other. R3-1347 — the parser is YAML-backed and the transpiler
-// delegates to it, so the host and every other reader parse with one function; its
-// frozen fixture is what each consumer runs to prove it.
-export { parseFrontmatter } from './frontmatter';
-export type {
-  FrontmatterError,
-  FrontmatterParseResult,
-  FrontmatterValue,
-  ParsedFrontmatter,
-} from './frontmatter';
-export { FRONTMATTER_PARITY_FIXTURE } from './frontmatterFixture';
-export type { FrontmatterCase } from './frontmatterFixture';
+// careful port of the other.
+//
+// R3-1347 — the parser is YAML-backed (the transpiler delegates to it) and lives on its
+// own subpath, `@immediately-run/mdx-plugins/frontmatter` (`src/frontmatterEntry.ts`),
+// with its fixture. It is NOT re-exported here: `yaml` cannot be tree-shaken, so a root
+// export would put it in every consumer's bundle, the SDK's safe renderer included.
 export { isContentEntryFile, isContentEntryPath } from './corpusEntry';
 export type { HeadingAnchorOptions } from './remarkHeadingAnchors';
 

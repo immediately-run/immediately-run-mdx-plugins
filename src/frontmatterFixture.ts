@@ -7,9 +7,11 @@
 // trusting it: run every case through the parser you actually ship, compare with
 // `expected`. A copied parser, a second YAML library or a stale pin fails here.
 //
+// It is exported from `@immediately-run/mdx-plugins/frontmatter`, beside the parser.
+//
 // HOW IT IS BUILT. The inputs are data, in `frontmatterFixture.cases.json`: one case per
 // input SHAPE (typed scalars, lists, lists of maps, deep nesting, flow maps, multi-line
-// scalars, comments, the fence variants, and the errors), two of them real files cut to
+// scalars, comments, the fence variants, explicit tags, and the errors), two of them real files cut to
 // their frontmatter. Each declares the exact YAML its fences enclose. The expectations,
 // in `frontmatterFixture.expected.json`, are generated from those blocks by `yaml.parse`
 // itself (`scripts/gen-frontmatter-fixture.mjs`) and frozen — never typed by hand.
