@@ -42,11 +42,17 @@ scan, the docs corpus checker and kanban. It is a fence plus `yaml.parse` with n
 (YAML 1.2, core schema), so `order: 20` is a number, `true` a boolean, lists of maps and
 deep nesting read in full, and a date stays a string.
 
-It never throws. It returns `{ data, body, content, hadFrontmatter, error? }`. A block
-that is not valid YAML (`yaml`), is a list or a scalar rather than a map (`not-a-map`), or
-holds a value no JSON envelope can carry because an explicit tag such as `!!timestamp`
-asked for one (`not-json`) gives `data: {}` and an `error` with its kind, message, `yaml`'s
-error code where there is one, and line and column in the document. A checker should fail
+It never throws. It returns `{ data, body, content, hadFrontmatter, error? }`. Three kinds
+of block give `data: {}` and an `error`:
+- `yaml`: not valid YAML.
+- `not-a-map`: a list, a scalar or a tagged value where the map should be.
+- `not-json`: the block holds a value JSON cannot carry. That is a `Date`, a byte array or
+  a `Set` from an explicit tag such as `!!timestamp`, `Infinity` or `NaN` from `.inf` or
+  `.nan`, or an alias cycle such as `a: &x [*x]`.
+
+The `error` has its kind and a one-line message, plus `yaml`'s error code when `yaml`
+raised one. It also has the line and column in the document wherever the node can be
+named; a value under a non-string key is the one case without them. A checker should fail
 on `error`; a viewer shows the entry without metadata.
 
 `FRONTMATTER_PARITY_FIXTURE` is the proof a consumer runs: one case per input shape, two

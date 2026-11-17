@@ -13,6 +13,7 @@ const SHAPES = [
   'flow-map', 'multi-line-plain', 'block-scalars', 'comment-line', 'crlf', 'bom',
   'fence-trailing-spaces', 'empty-block', 'comments-only', 'unclosed', 'no-frontmatter',
   'duplicate-key', 'bad-escape', 'list-document', 'explicit-tags',
+  'shared-alias', 'alias-cycle', 'non-finite-number', 'tagged-root',
 ];
 const REAL = ['real-grove-hero-unquoted', 'real-okf-ga4-events'];
 

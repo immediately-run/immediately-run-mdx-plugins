@@ -21,19 +21,30 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CASES = join(root, 'src/frontmatterFixture.cases.json');
 const EXPECTED = join(root, 'src/frontmatterFixture.expected.json');
 
-/** Whether every value in a parsed block is JSON-shaped: primitives, arrays, plain objects. */
-function isJsonShaped(value) {
-  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return true;
-  if (Array.isArray(value)) return value.every(isJsonShaped);
-  if (typeof value !== 'object') return false;
-  const proto = Object.getPrototypeOf(value);
-  return (proto === Object.prototype || proto === null) && Object.values(value).every(isJsonShaped);
+const isPlainObject = (v) =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) &&
+  [Object.prototype, null].includes(Object.getPrototypeOf(v));
+
+/**
+ * Whether every value in a parsed block is JSON: strings, booleans, null, FINITE numbers,
+ * arrays and plain objects, with no container inside itself (an alias cycle). `ancestors` is
+ * the containers on the current path, so an alias used twice side by side is still JSON.
+ */
+function isJson(value, ancestors = new Set()) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (!Array.isArray(value) && !isPlainObject(value)) return false;
+  if (ancestors.has(value)) return false;
+  ancestors.add(value);
+  const ok = (Array.isArray(value) ? value : Object.values(value)).every((v) => isJson(v, ancestors));
+  ancestors.delete(value);
+  return ok;
 }
 
 /**
  * What one declared block must parse to. The VALUE is `yaml.parse`'s; the three outcomes
- * that yield no data (a parse error, a block that is not a map, a value outside the JSON
- * set) are the contract `src/frontmatter.ts` documents, restated here as the expectation.
+ * that yield no data (a parse error, a block that is not a plain map, a value outside the
+ * JSON set) are the contract `src/frontmatter.ts` documents, restated here as the expectation.
  */
 function expectedFor(block) {
   if (block === null) return { data: {}, hadFrontmatter: false };
@@ -44,10 +55,8 @@ function expectedFor(block) {
     return { data: {}, hadFrontmatter: true, errorKind: 'yaml' };
   }
   if (parsed === null || parsed === undefined) return { data: {}, hadFrontmatter: true };
-  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { data: {}, hadFrontmatter: true, errorKind: 'not-a-map' };
-  }
-  if (!isJsonShaped(parsed)) return { data: {}, hadFrontmatter: true, errorKind: 'not-json' };
+  if (!isPlainObject(parsed)) return { data: {}, hadFrontmatter: true, errorKind: 'not-a-map' };
+  if (!isJson(parsed)) return { data: {}, hadFrontmatter: true, errorKind: 'not-json' };
   return { data: parsed, hadFrontmatter: true };
 }
 

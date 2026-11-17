@@ -35,10 +35,11 @@ export type ParsedFrontmatter = Record<string, FrontmatterValue>;
 /** Why a block that is present yielded no data. */
 export interface FrontmatterError {
   /**
-   * `yaml`: the block is not valid YAML. `not-a-map`: it parses, but to a list or a scalar.
-   * `not-json`: it parses to a map holding a value outside {@link FrontmatterValue} — an
-   * explicit tag such as `!!timestamp`, `!!binary` or `!!set` makes `yaml` build a `Date`,
-   * a byte array or a `Set`, which a metadata envelope of JSON values cannot carry.
+   * `yaml`: the block is not valid YAML. `not-a-map`: it parses, but to a list, a scalar or
+   * a tagged value rather than a map. `not-json`: it parses to a map holding a value outside
+   * {@link FrontmatterValue}, which a metadata envelope of JSON values cannot carry — a
+   * `Date`, byte array or `Set` from an explicit tag (`!!timestamp`, `!!binary`, `!!set`),
+   * `Infinity` or `NaN` from `.inf` / `.nan`, or an alias cycle (`a: &x [*x]`).
    */
   kind: 'yaml' | 'not-a-map' | 'not-json';
   /** The parser's message, first line only, without its own position suffix. */
@@ -118,34 +119,66 @@ function positionOf(yamlText: string, offset: number): { line: number; column: n
   };
 }
 
+type PathSegment = string | number;
+
+/** A map as `yaml` returns one untagged: an object whose prototype is `Object.prototype` (or null). */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/** How a value reads in a message: `a list`, `a string`, `a Date`, … */
+function describe(value: unknown): string {
+  if (Array.isArray(value)) return 'a list';
+  if (typeof value === 'object' && value !== null) return `a ${(value as object).constructor?.name ?? 'object'}`;
+  return `a ${typeof value}`;
+}
+
+/** `['meta', 'tags', 1]` → `meta.tags[1]`. */
+function formatPath(path: PathSegment[]): string {
+  return path.map((s, i) => (typeof s === 'number' ? `[${s}]` : i === 0 ? s : `.${s}`)).join('');
+}
+
 /**
- * The key path of the first value that is not a {@link FrontmatterValue}, or null.
+ * The first value that is not a {@link FrontmatterValue}, with its key path, or null.
  *
- * `yaml` with no options returns plain objects, arrays and primitives for untagged YAML —
- * and a `Date`, a byte array, a `Set` or a `Map` when an explicit tag asks for one. A plain
- * object is one whose prototype is `Object.prototype` (or null).
+ * `yaml` with no options returns plain objects, arrays and primitives for untagged YAML, and
+ * three things that are not JSON:
+ * - a `Date`, a byte array, a `Set` or a `Map`, when an explicit tag (`!!timestamp`, …) asks;
+ * - `Infinity` or `NaN`, from `.inf` / `.nan`;
+ * - a CYCLE, when an alias refers to a node that contains it (`a: &x [*x]`).
+ *
+ * `ancestors` holds the containers on the path from the root to `value` — not every container
+ * seen — so a cycle is caught while an alias used twice side by side (`b: *x`, `c: *x`) is
+ * not mistaken for one. Without it this walk overflowed the stack on a cycle and broke the
+ * never-throws guarantee (R3-1347 review 2-r2-0).
  */
-function firstNonJson(value: unknown, path: string): { path: string; what: string } | null {
-  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return null;
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      const hit = firstNonJson(value[i], `${path}[${i}]`);
+function firstNonJson(
+  value: unknown,
+  path: PathSegment[],
+  ancestors: Set<object>,
+): { path: PathSegment[]; why: string } | null {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? null : { path, why: `is ${value}, which JSON cannot represent` };
+  }
+  if (Array.isArray(value) || isPlainObject(value)) {
+    if (ancestors.has(value)) {
+      return { path, why: 'refers back to a node that contains it (a YAML alias cycle)' };
+    }
+    ancestors.add(value);
+    const entries: Array<[PathSegment, unknown]> = Array.isArray(value)
+      ? value.map((v, i) => [i, v])
+      : Object.entries(value);
+    for (const [key, child] of entries) {
+      const hit = firstNonJson(child, [...path, key], ancestors);
       if (hit) return hit;
     }
+    ancestors.delete(value);
     return null;
   }
-  if (typeof value === 'object') {
-    const proto = Object.getPrototypeOf(value);
-    if (proto === Object.prototype || proto === null) {
-      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        const hit = firstNonJson(v, path ? `${path}.${k}` : k);
-        if (hit) return hit;
-      }
-      return null;
-    }
-    return { path, what: (value as object).constructor?.name ?? 'object' };
-  }
-  return { path, what: typeof value };
+  return { path, why: `is ${describe(value)} — remove its explicit YAML tag` };
 }
 
 /**
@@ -180,23 +213,28 @@ export function parseFrontmatter(input: string): FrontmatterParseResult {
   }
   // A block holding only comments parses to null: frontmatter with no keys, like `---\n---`.
   if (parsed === null || parsed === undefined) return result;
-  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-    // Point at the node itself: comments or blank lines may come before it. `parse` just
-    // succeeded on this text, so `parseDocument` (the same parser, no options) succeeds too.
+  // Positions below come from `parseDocument` — the same parser with no options, which just
+  // succeeded on this text through `parse` — and only on these error paths.
+  if (!isPlainObject(parsed)) {
+    // A list, a scalar, or a tagged value (a Date, a Set) where the map should be. Point at
+    // the node itself: comments or blank lines may come before it.
     const start = parseDocument(yamlText).contents?.range?.[0] ?? 0;
     result.error = {
       kind: 'not-a-map',
-      message: `frontmatter must be a map of keys, not ${Array.isArray(parsed) ? 'a list' : `a ${typeof parsed}`}`,
+      message: `frontmatter must be a map of keys, not ${describe(parsed)}`,
       ...positionOf(yamlText, start),
     };
     return result;
   }
-  const nonJson = firstNonJson(parsed, '');
+  const nonJson = firstNonJson(parsed, [], new Set());
   if (nonJson) {
     result.error = {
       kind: 'not-json',
-      message: `\`${nonJson.path}\` is a ${nonJson.what}, which frontmatter cannot hold — remove its explicit YAML tag`,
+      message: `\`${formatPath(nonJson.path)}\` ${nonJson.why}; frontmatter holds JSON values only`,
     };
+    // The node at that key path, when the document can name it (a non-string key may not).
+    const node = parseDocument(yamlText).getIn(nonJson.path, true) as { range?: [number, number, number] } | undefined;
+    if (node?.range) Object.assign(result.error, positionOf(yamlText, node.range[0]));
     return result;
   }
   result.data = parsed as ParsedFrontmatter;

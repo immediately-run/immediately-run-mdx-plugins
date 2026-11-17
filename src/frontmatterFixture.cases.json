@@ -156,6 +156,30 @@
     "block": "published: !!timestamp 2026-01-01\nraw: !!binary aGVsbG8="
   },
   {
+    "name": "shared-alias",
+    "why": "an alias used twice side by side resolves to the same value in both places — it is not a cycle",
+    "source": "---\ndefaults: &d [a, b]\nfirst: *d\nsecond: *d\n---\nBody.\n",
+    "block": "defaults: &d [a, b]\nfirst: *d\nsecond: *d"
+  },
+  {
+    "name": "alias-cycle",
+    "why": "an alias that refers to a node containing it makes yaml build a cyclic value: an error, never a stack overflow",
+    "source": "---\nloop: &x\n  self: *x\n---\nBody.\n",
+    "block": "loop: &x\n  self: *x"
+  },
+  {
+    "name": "non-finite-number",
+    "why": "`.inf` and `.nan` are numbers JSON cannot represent: an error, not a value that turns into null on the wire",
+    "source": "---\nweight: .inf\n---\nBody.\n",
+    "block": "weight: .inf"
+  },
+  {
+    "name": "tagged-root",
+    "why": "a tagged scalar where the map should be (a Date) is not a map",
+    "source": "---\n!!timestamp 2026-01-01\n---\nBody.\n",
+    "block": "!!timestamp 2026-01-01"
+  },
+  {
     "name": "real-grove-hero-unquoted",
     "why": "REAL BYTES: immediately-run/grove content/_layouts/hero.mdx at 33391ef — `description:` holds `nav: top` mid-line, which the host rejected while every check passed",
     "source": "---\nlayoutRole: root\nnav: top\ndescription: A landing root starter — copy to your content root as _layout.mdx for a full-bleed band over TOP navigation (nav: top; the one arrangement the default shell cannot give you) followed by a short grid. DocList attributes must stay literals — the interpreter drops expressions like limit={n} silently. The picture slot renders the link-graph lattice until cover: lands.\n---\n\n<GroveNav />\n",

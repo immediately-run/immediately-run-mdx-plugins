@@ -178,6 +178,38 @@
     "hadFrontmatter": true,
     "errorKind": "not-json"
   },
+  "shared-alias": {
+    "data": {
+      "defaults": [
+        "a",
+        "b"
+      ],
+      "first": [
+        "a",
+        "b"
+      ],
+      "second": [
+        "a",
+        "b"
+      ]
+    },
+    "hadFrontmatter": true
+  },
+  "alias-cycle": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-json"
+  },
+  "non-finite-number": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-json"
+  },
+  "tagged-root": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-a-map"
+  },
   "real-grove-hero-unquoted": {
     "data": {},
     "hadFrontmatter": true,

@@ -19,7 +19,11 @@ test('every fixture case parses to its expectation', () => {
 });
 
 test('it never throws, whatever the input', () => {
-  const extra = ['', '---', '---\n', '---\n---', '﻿', '---\n: :\n---\n', '---\n&a [*a]\n---\n'];
+  const extra = [
+    '', '---', '---\n', '---\n---', '\uFEFF', '---\n: :\n---\n', '---\n&a [*a]\n---\n',
+    // Review 2-r2-0: MAP-rooted cycles reach the JSON walk; the root-level one above does not.
+    '---\na: &x [*x]\n---\n', '---\na: &x {b: *x}\n---\n', '---\na: [1, &x [2, *x]]\n---\n',
+  ];
   for (const src of [...FRONTMATTER_PARITY_FIXTURE.map((c) => c.source), ...extra]) {
     assert.doesNotThrow(() => parseFrontmatter(src), JSON.stringify(src));
   }
@@ -67,9 +71,45 @@ test('a value outside the JSON set is an error naming its key path, never a Date
     assert.deepEqual(r.data, {}, src);
     assert.ok(r.error.message.includes(`\`${path}\``), `${src}: names ${path} — ${r.error.message}`);
     assert.match(r.error.message, what, src);
+    assert.equal(typeof r.error.line, 'number', `${src}: positioned (review 2-r2-2)`);
   }
   // An untagged date stays a string, so ordinary frontmatter never meets this error.
   assert.deepEqual(parseFrontmatter('---\ndate: 2026-01-01\n---\n').data, { date: '2026-01-01' });
+});
+
+test('an alias cycle is not-json at the alias; a shared alias is plain data', () => {
+  // Review 2-r2-0: the walk tracks ancestors on the current path, not every node seen.
+  const cyc = parseFrontmatter('---\ntitle: x\na: &x {b: *x}\n---\n');
+  assert.equal(cyc.error?.kind, 'not-json');
+  assert.ok(cyc.error.message.includes('`a.b`'), cyc.error.message);
+  assert.match(cyc.error.message, /cycle/);
+  assert.deepEqual([cyc.error.line, cyc.error.column], [3, 11]);
+  assert.deepEqual(cyc.data, {});
+
+  const shared = parseFrontmatter('---\nd: &d [1]\ne: *d\nf: {g: *d}\n---\n');
+  assert.equal(shared.error, undefined);
+  assert.deepEqual(shared.data, { d: [1], e: [1], f: { g: [1] } });
+});
+
+test('Infinity and NaN are not-json, positioned at their value', () => {
+  // Review 2-r2-2: JSON.stringify writes both as null, so the envelope would not carry them.
+  for (const [src, path, line] of [
+    ['---\nweight: .inf\n---\n', 'weight', 2],
+    ['---\nok: 1\nm:\n  - .nan\n---\n', 'm[0]', 4],
+  ]) {
+    const r = parseFrontmatter(src);
+    assert.equal(r.error?.kind, 'not-json', src);
+    assert.ok(r.error.message.includes(`\`${path}\``), r.error.message);
+    assert.equal(r.error.line, line, src);
+  }
+});
+
+test('a tagged value at the root is not-a-map, positioned at the node', () => {
+  // Review 2-r2-1: the map check is the plain-object test, so a Date or Set is not a map.
+  const r = parseFrontmatter('---\n# c\n!!set {a, b}\n---\n');
+  assert.equal(r.error?.kind, 'not-a-map');
+  assert.match(r.error.message, /a Set/);
+  assert.equal(r.error.line, 3);
 });
 
 test('deeply nested input fails bounded, with yaml\'s own code (GHSA-48c2-rrv3-qjmp)', () => {
