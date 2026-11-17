@@ -1,0 +1,254 @@
+{
+  "plain-string": {
+    "data": {
+      "title": "A plain title"
+    },
+    "hadFrontmatter": true
+  },
+  "integer": {
+    "data": {
+      "order": 20
+    },
+    "hadFrontmatter": true
+  },
+  "float": {
+    "data": {
+      "version": 0.5
+    },
+    "hadFrontmatter": true
+  },
+  "boolean": {
+    "data": {
+      "inert-demo": true,
+      "answer": "no"
+    },
+    "hadFrontmatter": true
+  },
+  "empty-value": {
+    "data": {
+      "cover": null
+    },
+    "hadFrontmatter": true
+  },
+  "date-stays-string": {
+    "data": {
+      "date": "2026-09-03"
+    },
+    "hadFrontmatter": true
+  },
+  "quoted-escapes": {
+    "data": {
+      "title": "R3-170 — \"Open as wiki\" é",
+      "alt": "it's"
+    },
+    "hadFrontmatter": true
+  },
+  "flow-list": {
+    "data": {
+      "tags": [
+        "a",
+        "b",
+        "c, d"
+      ]
+    },
+    "hadFrontmatter": true
+  },
+  "block-list": {
+    "data": {
+      "repos": [
+        "sdk",
+        "sandbox"
+      ]
+    },
+    "hadFrontmatter": true
+  },
+  "list-of-maps": {
+    "data": {
+      "sources": [
+        {
+          "id": "a",
+          "resource": "https://example.com/a"
+        },
+        {
+          "id": "b",
+          "resource": "/tables/b.md"
+        }
+      ]
+    },
+    "hadFrontmatter": true
+  },
+  "nested-three-levels": {
+    "data": {
+      "owns": {
+        "concepts": {
+          "primary": [
+            "x"
+          ],
+          "secondary": [
+            "y"
+          ]
+        }
+      }
+    },
+    "hadFrontmatter": true
+  },
+  "flow-map": {
+    "data": {
+      "generated": {
+        "by": "human:ahormati",
+        "at": "2026-04-12T09:00:00Z"
+      },
+      "owns": {}
+    },
+    "hadFrontmatter": true
+  },
+  "multi-line-plain": {
+    "data": {
+      "description": "One row per order across all channels."
+    },
+    "hadFrontmatter": true
+  },
+  "block-scalars": {
+    "data": {
+      "literal": "line one\nline two\n",
+      "folded": "line one line two\n"
+    },
+    "hadFrontmatter": true
+  },
+  "comment-line": {
+    "data": {
+      "prs": [
+        "https://github.com/o/r/pull/79"
+      ]
+    },
+    "hadFrontmatter": true
+  },
+  "crlf": {
+    "data": {
+      "title": "Windows",
+      "order": 3
+    },
+    "hadFrontmatter": true
+  },
+  "bom": {
+    "data": {
+      "title": "With BOM"
+    },
+    "hadFrontmatter": true
+  },
+  "fence-trailing-spaces": {
+    "data": {
+      "title": "Spaced fences"
+    },
+    "hadFrontmatter": true
+  },
+  "empty-block": {
+    "data": {},
+    "hadFrontmatter": true
+  },
+  "comments-only": {
+    "data": {},
+    "hadFrontmatter": true
+  },
+  "unclosed": {
+    "data": {},
+    "hadFrontmatter": false
+  },
+  "no-frontmatter": {
+    "data": {},
+    "hadFrontmatter": false
+  },
+  "duplicate-key": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "yaml"
+  },
+  "bad-escape": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "yaml"
+  },
+  "list-document": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-a-map"
+  },
+  "explicit-tags": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-json"
+  },
+  "shared-alias": {
+    "data": {
+      "defaults": [
+        "a",
+        "b"
+      ],
+      "first": [
+        "a",
+        "b"
+      ],
+      "second": [
+        "a",
+        "b"
+      ]
+    },
+    "hadFrontmatter": true
+  },
+  "alias-cycle": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-json"
+  },
+  "non-finite-number": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-json"
+  },
+  "tagged-root": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "not-a-map"
+  },
+  "real-grove-hero-unquoted": {
+    "data": {},
+    "hadFrontmatter": true,
+    "errorKind": "yaml"
+  },
+  "real-okf-ga4-events": {
+    "data": {
+      "type": "BigQuery Table",
+      "resource": "https://bigquery.googleapis.com/v2/projects/bigquery-public-data/datasets/ga4_obfuscated_sample_ecommerce/tables/events_*",
+      "title": "GA4 Events Export",
+      "description": "Google Analytics 4 event-level daily sharded export tables containing user interaction logs.",
+      "tags": [
+        "analytics",
+        "e-commerce",
+        "ga4",
+        "sharded-tables"
+      ],
+      "generated": {
+        "by": "reference_agent/gemini-3.5-flash",
+        "at": "2026-07-10T21:15:20+00:00"
+      },
+      "sources": [
+        {
+          "title": "Google Analytics Help: BigQuery Export Schema",
+          "id": "ga4-export-docs",
+          "resource": "https://support.google.com/analytics/answer/7029846"
+        },
+        {
+          "title": "BigQuery Table Metadata",
+          "id": "metadata",
+          "resource": "https://bigquery.googleapis.com/v2/projects/bigquery-public-data/datasets/ga4_obfuscated_sample_ecommerce/tables/events_*"
+        },
+        {
+          "title": "Sample queries for audiences based on BigQuery data - Analytics Help",
+          "resource": "https://support.google.com/analytics/answer/9037342",
+          "id": "sample_queries"
+        }
+      ]
+    },
+    "hadFrontmatter": true
+  }
+}

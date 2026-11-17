@@ -25,7 +25,41 @@ verbatim, and resolve nothing against other files (per-file byte-identity,
 `MDX_CONTENT_COLLECTIONS_SPEC §1.1`). They have **no runtime dependency** (the `unified`
 import is type-only). Extracting them here lets the SDK's safe renderer consume the *same
 source* as the transpiler without pulling the heavy `@babel/standalone` / `@mdx-js/mdx`
-graph into every app that only renders safe content.
+graph into every app that only renders safe content. The package root keeps that
+property. The package's one runtime dependency, `yaml` (pinned exactly), is used only by
+the frontmatter parser, which lives on its own subpath (below) so that importing the
+root never pulls it in.
+
+## Frontmatter
+
+```ts
+import { parseFrontmatter, FRONTMATTER_PARITY_FIXTURE } from '@immediately-run/mdx-plugins/frontmatter';
+```
+
+`parseFrontmatter(source)` is the one frontmatter parser every corpus reader shares: the
+host's metadata scan (the transpiler delegates to it, R3-1348), Grove's dispatch-mode
+scan, the docs corpus checker and kanban. It is a fence plus `yaml.parse` with no options
+(YAML 1.2, core schema), so `order: 20` is a number, `true` a boolean, lists of maps and
+deep nesting read in full, and a date stays a string.
+
+It never throws. It returns `{ data, body, content, hadFrontmatter, error? }`. Three kinds
+of block give `data: {}` and an `error`:
+- `yaml`: not valid YAML.
+- `not-a-map`: a list, a scalar or a tagged value where the map should be.
+- `not-json`: the block holds a value JSON cannot carry. That is a `Date`, a byte array, a
+  `Set` or a `Map` from an explicit tag such as `!!timestamp` or `!!omap`, `Infinity` or
+  `NaN` from `.inf` or `.nan`, or an alias cycle such as `a: &x [*x]`.
+
+The `error` has its kind and a one-line message, plus `yaml`'s error code when `yaml`
+raised one. It also has the line and column in the document wherever the node can be
+named. Two cases may have none: a value under a non-string key, and a value first reached
+through an alias. A checker should fail
+on `error`; a viewer shows the entry without metadata.
+
+`FRONTMATTER_PARITY_FIXTURE` is the proof a consumer runs: one case per input shape, two
+of them real files, with expectations generated from `yaml.parse` itself
+(`scripts/gen-frontmatter-fixture.mjs`; `npm run check:fixture` re-checks them). Run every
+case through the parser you ship and compare.
 
 ## API
 

@@ -1,7 +1,7 @@
 {
   "name": "@immediately-run/mdx-plugins",
-  "version": "0.7.1",
-  "description": "immediately.run's in-house remark plugins for the MDX safe subset (admonitions \u00a712, wiki-links \u00a713, heading/section-id anchors \u00a715) + the slug grammar (textSlug/sectionId). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES \u00a75.1 / R3-213), so the two render paths can't drift. A leaf package: pure mdast transforms, no babel/mdx/react runtime dep (only a type-only `unified` import).",
+  "version": "0.8.0",
+  "description": "immediately.run's in-house remark plugins for the MDX safe subset (admonitions §12, wiki-links §13, heading/section-id anchors §15), the slug grammar (textSlug/sectionId), and the one frontmatter parser every corpus reader shares (parseFrontmatter, YAML 1.2 via `yaml`, on the `/frontmatter` subpath). The SINGLE source of truth shared byte-for-byte between the transpiler's compiled path and the SDK's non-executable safe renderer (TRUST_MODES §5.1 / R3-213), so the two render paths can't drift. The plugins are pure mdast transforms; the only runtime dependency is `yaml`, imported only by the `/frontmatter` subpath, so the root stays dependency-free.",
   "license": "MIT",
   "repository": "github:immediately-run/immediately-run-mdx-plugins",
   "type": "module",
@@ -13,6 +13,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./frontmatter": {
+      "types": "./dist/frontmatter.d.ts",
+      "import": "./dist/frontmatter.js",
+      "require": "./dist/frontmatter.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -30,7 +35,11 @@
     "docs:json": "typedoc --json docs/api.json",
     "docs": "npm run docs:json && node scripts/gen-llms.mjs",
     "check:llms": "npm run docs:json && node scripts/gen-llms.mjs --check",
-    "verify": "npm run build && npm test && npm run check:llms && npm run lint"
+    "verify": "npm run build && npm test && npm run check:fixture && npm run check:llms && npm run lint",
+    "check:fixture": "node scripts/gen-frontmatter-fixture.mjs --check"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
@@ -40,8 +49,7 @@
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.20.0",
     "unified": "11.0.5",
-    "typedoc": "^0.27.0",
-    "yaml": "^2.7.1"
+    "typedoc": "^0.27.0"
   },
   "engines": {
     "node": ">=18"

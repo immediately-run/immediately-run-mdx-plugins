@@ -1,0 +1,194 @@
+[
+  {
+    "name": "plain-string",
+    "why": "a bare scalar stays a string",
+    "source": "---\ntitle: A plain title\n---\n\nBody.\n",
+    "block": "title: A plain title"
+  },
+  {
+    "name": "integer",
+    "why": "an unquoted integer is a number on the host (`order: 20`), not the string \"20\"",
+    "source": "---\norder: 20\n---\n\nBody.\n",
+    "block": "order: 20"
+  },
+  {
+    "name": "float",
+    "why": "a dotted number is a float: `topics: [00.5]` reads as 0.5, which is why a label must be quoted",
+    "source": "---\nversion: 00.5\n---\n\nBody.\n",
+    "block": "version: 00.5"
+  },
+  {
+    "name": "boolean",
+    "why": "`true` is a boolean (`inert-demo: true`), and YAML 1.2 keeps `no` a string (no Norway problem)",
+    "source": "---\ninert-demo: true\nanswer: no\n---\n\nBody.\n",
+    "block": "inert-demo: true\nanswer: no"
+  },
+  {
+    "name": "empty-value",
+    "why": "a key with no value is null",
+    "source": "---\ncover:\n---\n\nBody.\n",
+    "block": "cover:"
+  },
+  {
+    "name": "date-stays-string",
+    "why": "the core schema has no timestamp type: a date stays the string the author wrote",
+    "source": "---\ndate: 2026-09-03\n---\n\nBody.\n",
+    "block": "date: 2026-09-03"
+  },
+  {
+    "name": "quoted-escapes",
+    "why": "double-quoted escapes decode; single-quoted doubles a quote",
+    "source": "---\ntitle: \"R3-170 — \\\"Open as wiki\\\" \\u00e9\"\nalt: 'it''s'\n---\n\nBody.\n",
+    "block": "title: \"R3-170 — \\\"Open as wiki\\\" \\u00e9\"\nalt: 'it''s'"
+  },
+  {
+    "name": "flow-list",
+    "why": "an inline `[a, b]` list",
+    "source": "---\ntags: [a, b, \"c, d\"]\n---\n\nBody.\n",
+    "block": "tags: [a, b, \"c, d\"]"
+  },
+  {
+    "name": "block-list",
+    "why": "a `- item` list under a key",
+    "source": "---\nrepos:\n  - sdk\n  - sandbox\n---\n\nBody.\n",
+    "block": "repos:\n  - sdk\n  - sandbox"
+  },
+  {
+    "name": "list-of-maps",
+    "why": "a list whose items are maps (OKF `sources:`) — the subset reader turned these into strings",
+    "source": "---\nsources:\n  - id: a\n    resource: https://example.com/a\n  - id: b\n    resource: /tables/b.md\n---\n\nBody.\n",
+    "block": "sources:\n  - id: a\n    resource: https://example.com/a\n  - id: b\n    resource: /tables/b.md"
+  },
+  {
+    "name": "nested-three-levels",
+    "why": "maps nest to any depth, not one level",
+    "source": "---\nowns:\n  concepts:\n    primary: [x]\n    secondary:\n      - y\n---\n\nBody.\n",
+    "block": "owns:\n  concepts:\n    primary: [x]\n    secondary:\n      - y"
+  },
+  {
+    "name": "flow-map",
+    "why": "an inline `{ by, at }` map (OKF `generated:`)",
+    "source": "---\ngenerated: { by: human:ahormati, at: '2026-04-12T09:00:00Z' }\nowns: {}\n---\n\nBody.\n",
+    "block": "generated: { by: human:ahormati, at: '2026-04-12T09:00:00Z' }\nowns: {}"
+  },
+  {
+    "name": "multi-line-plain",
+    "why": "a plain scalar continued on an indented line is one string — the subset reader dropped the continuation",
+    "source": "---\ndescription: One row per order across\n  all channels.\n---\n\nBody.\n",
+    "block": "description: One row per order across\n  all channels."
+  },
+  {
+    "name": "block-scalars",
+    "why": "`|` keeps newlines, `>` folds them",
+    "source": "---\nliteral: |\n  line one\n  line two\nfolded: >\n  line one\n  line two\n---\n\nBody.\n",
+    "block": "literal: |\n  line one\n  line two\nfolded: >\n  line one\n  line two"
+  },
+  {
+    "name": "comment-line",
+    "why": "a comment is not a value — the subset reader kept `# merged …` inside a list item",
+    "source": "---\n# a comment\nprs:\n  - https://github.com/o/r/pull/79  # merged 34d1bdc\n---\n\nBody.\n",
+    "block": "# a comment\nprs:\n  - https://github.com/o/r/pull/79  # merged 34d1bdc"
+  },
+  {
+    "name": "crlf",
+    "why": "a CRLF file: the fence matches and values carry no `\\r`",
+    "source": "---\r\ntitle: Windows\r\norder: 3\r\n---\r\n\r\nBody.\r\n",
+    "block": "title: Windows\r\norder: 3"
+  },
+  {
+    "name": "bom",
+    "why": "a leading byte-order mark does not hide the fence",
+    "source": "﻿---\ntitle: With BOM\n---\nBody.\n",
+    "block": "title: With BOM"
+  },
+  {
+    "name": "fence-trailing-spaces",
+    "why": "trailing spaces on either fence are allowed",
+    "source": "---  \ntitle: Spaced fences\n--- \t\nBody.\n",
+    "block": "title: Spaced fences"
+  },
+  {
+    "name": "empty-block",
+    "why": "`---` then `---`: frontmatter with no keys, not \"no frontmatter\"",
+    "source": "---\n---\n\nBody.\n",
+    "block": ""
+  },
+  {
+    "name": "comments-only",
+    "why": "a block of comments only is frontmatter with no keys",
+    "source": "---\n# nothing here yet\n---\n\nBody.\n",
+    "block": "# nothing here yet"
+  },
+  {
+    "name": "unclosed",
+    "why": "an opening fence that never closes is no frontmatter at all",
+    "source": "---\ntitle: never closed\n\nBody.\n",
+    "block": null
+  },
+  {
+    "name": "no-frontmatter",
+    "why": "a document without a fence",
+    "source": "# Just a heading\n\ntext\n",
+    "block": null
+  },
+  {
+    "name": "duplicate-key",
+    "why": "a repeated key is a YAML error, not last-one-wins",
+    "source": "---\nid: a\nid: b\n---\n\nBody.\n",
+    "block": "id: a\nid: b"
+  },
+  {
+    "name": "bad-escape",
+    "why": "an escape YAML does not define is an error, not two characters standing as written",
+    "source": "---\ntitle: \"a\\qb\"\n---\n\nBody.\n",
+    "block": "title: \"a\\qb\""
+  },
+  {
+    "name": "list-document",
+    "why": "a block that parses to a list is not frontmatter",
+    "source": "---\n- a\n- b\n---\n\nBody.\n",
+    "block": "- a\n- b"
+  },
+  {
+    "name": "explicit-tags",
+    "why": "an explicit `!!timestamp` or `!!binary` tag makes yaml build a Date or a byte array, which no JSON envelope can carry: an error, not a value only one reader could hold",
+    "source": "---\npublished: !!timestamp 2026-01-01\nraw: !!binary aGVsbG8=\n---\nBody.\n",
+    "block": "published: !!timestamp 2026-01-01\nraw: !!binary aGVsbG8="
+  },
+  {
+    "name": "shared-alias",
+    "why": "an alias used twice side by side resolves to the same value in both places — it is not a cycle",
+    "source": "---\ndefaults: &d [a, b]\nfirst: *d\nsecond: *d\n---\nBody.\n",
+    "block": "defaults: &d [a, b]\nfirst: *d\nsecond: *d"
+  },
+  {
+    "name": "alias-cycle",
+    "why": "an alias that refers to a node containing it makes yaml build a cyclic value: an error, never a stack overflow",
+    "source": "---\nloop: &x\n  self: *x\n---\nBody.\n",
+    "block": "loop: &x\n  self: *x"
+  },
+  {
+    "name": "non-finite-number",
+    "why": "`.inf` and `.nan` are numbers JSON cannot represent: an error, not a value that turns into null on the wire",
+    "source": "---\nweight: .inf\n---\nBody.\n",
+    "block": "weight: .inf"
+  },
+  {
+    "name": "tagged-root",
+    "why": "a tagged scalar where the map should be (a Date) is not a map",
+    "source": "---\n!!timestamp 2026-01-01\n---\nBody.\n",
+    "block": "!!timestamp 2026-01-01"
+  },
+  {
+    "name": "real-grove-hero-unquoted",
+    "why": "REAL BYTES: immediately-run/grove content/_layouts/hero.mdx at 33391ef — `description:` holds `nav: top` mid-line, which the host rejected while every check passed",
+    "source": "---\nlayoutRole: root\nnav: top\ndescription: A landing root starter — copy to your content root as _layout.mdx for a full-bleed band over TOP navigation (nav: top; the one arrangement the default shell cannot give you) followed by a short grid. DocList attributes must stay literals — the interpreter drops expressions like limit={n} silently. The picture slot renders the link-graph lattice until cover: lands.\n---\n\n<GroveNav />\n",
+    "block": "layoutRole: root\nnav: top\ndescription: A landing root starter — copy to your content root as _layout.mdx for a full-bleed band over TOP navigation (nav: top; the one arrangement the default shell cannot give you) followed by a short grid. DocList attributes must stay literals — the interpreter drops expressions like limit={n} silently. The picture slot renders the link-graph lattice until cover: lands."
+  },
+  {
+    "name": "real-okf-ga4-events",
+    "why": "REAL BYTES: open-knowledge-format bundles/ga4/tables/events_.md at ad30107 (Apache-2.0, GoogleCloudPlatform) — a list of maps, a nested map and a multi-line plain scalar",
+    "source": "---\ntype: BigQuery Table\nresource: https://bigquery.googleapis.com/v2/projects/bigquery-public-data/datasets/ga4_obfuscated_sample_ecommerce/tables/events_*\ntitle: GA4 Events Export\ndescription: Google Analytics 4 event-level daily sharded export tables containing\n  user interaction logs.\ntags:\n- analytics\n- e-commerce\n- ga4\n- sharded-tables\ngenerated:\n  by: reference_agent/gemini-3.5-flash\n  at: '2026-07-10T21:15:20+00:00'\nsources:\n- title: 'Google Analytics Help: BigQuery Export Schema'\n  id: ga4-export-docs\n  resource: https://support.google.com/analytics/answer/7029846\n- title: BigQuery Table Metadata\n  id: metadata\n  resource: https://bigquery.googleapis.com/v2/projects/bigquery-public-data/datasets/ga4_obfuscated_sample_ecommerce/tables/events_*\n- title: Sample queries for audiences based on BigQuery data - Analytics Help\n  resource: https://support.google.com/analytics/answer/9037342\n  id: sample_queries\n---\n\nThe `events_` table family contains obfuscated Google Analytics 4 (GA4) event-level export data from the Google Merchandise Store.[^ga4-export-docs] It is structured as a series of daily sharded tables, starting from `events_20201101` through `events_20210131`.[^metadata] Each row represents a single event (e.g., `page_view`, `scroll`, `session_start`, `view_item`, `purchase`) triggered by a user's interaction with the online storefront.\n",
+    "block": "type: BigQuery Table\nresource: https://bigquery.googleapis.com/v2/projects/bigquery-public-data/datasets/ga4_obfuscated_sample_ecommerce/tables/events_*\ntitle: GA4 Events Export\ndescription: Google Analytics 4 event-level daily sharded export tables containing\n  user interaction logs.\ntags:\n- analytics\n- e-commerce\n- ga4\n- sharded-tables\ngenerated:\n  by: reference_agent/gemini-3.5-flash\n  at: '2026-07-10T21:15:20+00:00'\nsources:\n- title: 'Google Analytics Help: BigQuery Export Schema'\n  id: ga4-export-docs\n  resource: https://support.google.com/analytics/answer/7029846\n- title: BigQuery Table Metadata\n  id: metadata\n  resource: https://bigquery.googleapis.com/v2/projects/bigquery-public-data/datasets/ga4_obfuscated_sample_ecommerce/tables/events_*\n- title: Sample queries for audiences based on BigQuery data - Analytics Help\n  resource: https://support.google.com/analytics/answer/9037342\n  id: sample_queries"
+  }
+]

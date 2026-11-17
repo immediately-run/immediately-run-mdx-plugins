@@ -1,14 +1,15 @@
 // R3-277a — the corpus-tooling core: the frontmatter reader and the entry rule.
 //
-// These cases are the GRAMMAR, stated where the implementation now lives. The
-// consumers' own suites assert the same behaviour through their imports, and the docs
-// repo additionally replays the entire 706-file corpus against a golden captured from
-// the parser this one replaced — a unit test can only cover the shapes someone thought
-// of, and a corpus is the set nobody did.
+// These cases are the GRAMMAR, stated where the implementation now lives. Since R3-1347
+// the grammar is YAML 1.2 (the `yaml` package, no options — what the host has always
+// run); `test/frontmatter.test.mjs` runs the published fixture, and the docs repo
+// replays its corpus against a frozen golden — a unit test can only cover the shapes
+// someone thought of, and a corpus is the set nobody did.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseFrontmatter, isContentEntryFile, isContentEntryPath } from '../dist/index.js';
+import { isContentEntryFile, isContentEntryPath } from '../dist/index.js';
+import { parseFrontmatter } from '../dist/frontmatter.js';
 
 test('parses scalars, flow lists, block lists and one level of nesting', () => {
   const src = [
@@ -120,15 +121,21 @@ test('every escape YAML 1.2 §5.7 defines decodes to its character', () => {
   }
 });
 
-test('a backslash a real parser would reject stands as written — never half-eaten', () => {
-  // A viewer may not turn a malformed entry into a blank page, and dropping the
-  // backslash would silently rewrite the author's text. Both characters survive.
-  const { data } = parseFrontmatter('---\ntitle: "a\\qb"\n---\n');
-  assert.equal(data.title, 'a\\qb');
-  // Same for a truncated hex form: `\\x4` is not two hex digits.
-  assert.equal(parseFrontmatter('---\ntitle: "a\\x4"\n---\n').data.title, 'a\\x4');
-  // …and for a code point past the Unicode range, which `String.fromCodePoint` throws on.
-  assert.equal(parseFrontmatter('---\nid: "\\U00110000"\n---\n').data.id, '\\U00110000');
+test('an escape YAML rejects is an error the reader reports — never a half-read block', () => {
+  // R3-1347: the host's parser rejects these documents, so this one does too. It may not
+  // throw (a viewer must not blank the page): the block yields no data and says where.
+  // The subset reader let both characters stand, which is a value the host never had.
+  for (const src of [
+    '---\ntitle: "a\\qb"\n---\n', // not an escape
+    '---\ntitle: "a\\x4"\n---\n', // truncated hex form
+    '---\nid: "\\U00110000"\n---\n', // past the Unicode range
+  ]) {
+    const r = parseFrontmatter(src);
+    assert.deepEqual(r.data, {}, src);
+    assert.equal(r.hadFrontmatter, true, src);
+    assert.equal(r.error?.kind, 'yaml', src);
+    assert.equal(r.error?.line, 2, `${src} — the value's line, counting the opening fence`);
+  }
 });
 
 test('a single-quoted scalar has exactly one escape: a doubled quote', () => {
@@ -145,10 +152,15 @@ test('escapes decode inside list items too, block and flow alike', () => {
   assert.deepEqual(data.owns, { concepts: ['e"f'] });
 });
 
-test('a one-character value survives: `"` is not a quoted empty string', () => {
-  // `s.startsWith('"') && s.endsWith('"')` is true of a lone quote, and slicing it
-  // twice leaves nothing — a value silently deleted rather than rendered.
-  assert.equal(parseFrontmatter('---\ntitle: "\n---\n').data.title, '"');
-  assert.equal(parseFrontmatter("---\ntitle: '\n---\n").data.title, "'");
-  assert.equal(parseFrontmatter('---\ntitle: ""\n---\n').data.title, '');
+test('an unterminated quote is an error; an empty quoted string is the empty string', () => {
+  // R3-1347: `title: "` opens a quoted scalar that never closes. The subset reader kept
+  // the lone quote as the value; YAML (and so the host) rejects the block.
+  for (const src of ['---\ntitle: "\n---\n', "---\ntitle: '\n---\n"]) {
+    const r = parseFrontmatter(src);
+    assert.deepEqual(r.data, {}, src);
+    assert.equal(r.error?.kind, 'yaml', src);
+  }
+  const ok = parseFrontmatter('---\ntitle: ""\n---\n');
+  assert.equal(ok.data.title, '');
+  assert.equal(ok.error, undefined);
 });

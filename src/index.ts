@@ -32,15 +32,14 @@ export type { LinkSpaceCase } from './linkSpaceFixture';
 export { FS_PREFIX, normalizeAbsolute, resolveLinkTarget } from './linkSpaceCore';
 export type { ResolvedLinkTarget, LinkSpace } from './linkSpaceCore';
 
-// R3-277a — the corpus-tooling core: the minimal-YAML frontmatter reader and the
-// entry-enumeration rule, each of which had two implementations that agreed only
-// because one was a careful port of the other.
-export { parseFrontmatter } from './frontmatter';
-export type {
-  FrontmatterParseResult,
-  FrontmatterValue,
-  ParsedFrontmatter,
-} from './frontmatter';
+// R3-277a — the corpus-tooling core: the frontmatter parser and the entry-enumeration
+// rule, each of which had two implementations that agreed only because one was a
+// careful port of the other.
+//
+// R3-1347 — the parser is YAML-backed (the transpiler delegates to it) and lives on its
+// own subpath, `@immediately-run/mdx-plugins/frontmatter` (`src/frontmatterEntry.ts`),
+// with its fixture. It is NOT re-exported here: `yaml` cannot be tree-shaken, so a root
+// export would put it in every consumer's bundle, the SDK's safe renderer included.
 export { isContentEntryFile, isContentEntryPath } from './corpusEntry';
 export type { HeadingAnchorOptions } from './remarkHeadingAnchors';
 
