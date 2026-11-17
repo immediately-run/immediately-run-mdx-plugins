@@ -25,7 +25,27 @@ verbatim, and resolve nothing against other files (per-file byte-identity,
 `MDX_CONTENT_COLLECTIONS_SPEC §1.1`). They have **no runtime dependency** (the `unified`
 import is type-only). Extracting them here lets the SDK's safe renderer consume the *same
 source* as the transpiler without pulling the heavy `@babel/standalone` / `@mdx-js/mdx`
-graph into every app that only renders safe content.
+graph into every app that only renders safe content. The package's one runtime dependency
+is `yaml` (pinned exactly), used only by `parseFrontmatter`; a consumer that does not
+import it tree-shakes it away.
+
+## Frontmatter
+
+`parseFrontmatter(source)` is the one frontmatter parser every corpus reader shares: the
+host's metadata scan (the transpiler delegates to it, R3-1348), Grove's dispatch-mode
+scan, the docs corpus checker and kanban. It is a fence plus `yaml.parse` with no options
+(YAML 1.2, core schema), so `order: 20` is a number, `true` a boolean, lists of maps and
+deep nesting read in full, and a date stays a string.
+
+It never throws. It returns `{ data, body, content, hadFrontmatter, error? }`: a block
+that is not valid YAML, or that is a list rather than a map, gives `data: {}` and an
+`error` with its kind, message, and line and column in the document. A checker should fail
+on `error`; a viewer shows the entry without metadata.
+
+`FRONTMATTER_PARITY_FIXTURE` is the proof a consumer runs: one case per input shape, two
+of them real files, with expectations generated from `yaml.parse` itself
+(`scripts/gen-frontmatter-fixture.mjs`; `npm run check:fixture` re-checks them). Run every
+case through the parser you ship and compare.
 
 ## API
 
@@ -38,6 +58,8 @@ import {
   sectionId,             // (text) => 'sec-8-9' | null (prose-independent)
   parseBundleLayout,     // (layout: unknown) => { layout, diagnostics } — the §4a layout grammar
   pruneLayoutToView,     // (layout, subtree) => BundleLayout — the §4a.3 view prune
+  parseFrontmatter,      // (source) => { data, body, content, hadFrontmatter, error? }
+  FRONTMATTER_PARITY_FIXTURE, // the cases every frontmatter consumer runs
 } from '@immediately-run/mdx-plugins';
 ```
 
